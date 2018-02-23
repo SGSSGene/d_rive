@@ -155,12 +155,11 @@ struct Exp {
     }
 
     static void print(std::ostream& stream, PrintType type) {
-        stream << "pow(";
+        stream << "(";
         P1::print(stream, type);
-        stream << ", ";
+        stream << "^ ";
         P2::print(stream, type);
         stream << ")";
-
     }
 
     friend std::ostream& operator<< (std::ostream& stream, Exp const&) {
@@ -371,8 +370,7 @@ constexpr auto simplify_impl(Exp<P1, P2> value) {
 }
 
 template <typename P1, typename P2>
-constexpr auto simplify(Exp<P1, P2> value) {
-    (void)value;
+constexpr auto simplify([[maybe_unused]] Exp<P1, P2> value) {
     static_assert(not std::is_same_v<P1, ConstZero> or not std::is_same_v<P2, ConstZero>);
     if constexpr(std::is_same_v<P1, ConstZero>) {
         return ConstZero{};
@@ -623,7 +621,7 @@ auto eval_expr(Sum<Ps...> e, Tuple const& tuple) {
 }
 
 // ------------------- is const
-//
+
 template<int nr, typename Expr>
 constexpr auto isConst();
 
@@ -1028,6 +1026,11 @@ template <typename T1, typename T2>
 constexpr auto pow(T1 const&, T2 const&) {
     return full_simplify(Exp<T1, T2>{});
 }
+template <typename T1, typename T2>
+constexpr auto operator^(T1 const p1, T2 const& p2) {
+    return pow(p1, p2);
+}
+
 
 template <typename T1>
 constexpr auto ln(T1 const&) {
@@ -1050,10 +1053,6 @@ namespace d_rive {
 template <int n>
 constexpr auto x = detail::X<n>{};
 
-//template <char... args>
 using detail::operator ""_c;
-/*constexpr auto operator "" _c() {
-    return detail::operator "" _c<args...>();
-}*/
 
 } // namespace d_rive
