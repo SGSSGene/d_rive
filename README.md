@@ -1,4 +1,6 @@
 # d_rive
+[![forthebadge](https://forthebadge.com/images/badges/you-didnt-ask-for-this.svg)](https://forthebadge.com)
+[![forthebadge](https://forthebadge.com/images/badges/uses-badges.svg)](https://forthebadge.com)
 
 Compile time math expressions with c++17.
 - standard math addition, subtraction, multiplication, division
@@ -64,12 +66,3 @@ Lets go crazy:
     std::cout << integrate(f, x<1>) << "\n";
     std::cout << integrate(f, x<2>) << "\n";
 ```
-What didn't I tell you? You can compare whole expressions:
-```
-    auto f1 = 3_c * x<0> + 2_c * x<0>;
-    auto f2 = 5_c * x<0>;
-    bool same = (f1 == f2);
-    std::cout << same << "\n";
-```
-
-Go and have fun.
