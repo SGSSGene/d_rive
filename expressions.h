@@ -1054,5 +1054,6 @@ template <int n>
 constexpr auto x = detail::X<n>{};
 
 using detail::operator ""_c;
+using detail::derive;
 
 } // namespace d_rive
