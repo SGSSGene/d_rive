@@ -238,4 +238,48 @@ constexpr auto log(Number<TN2, TD2> _base, Number<TN1, TD1> _n) {
     return ln(_n) / ln(_base);
 }
 
+template<int f_x, typename Backtrace = std::tuple<>, typename X, typename NumbSum, typename Numb>
+constexpr auto sin_impl(X, NumbSum, Numb) {
+    constexpr auto newNumb = normalize(-Numb{} * X{} * X{} / Number<integer<f_x>>{} / Number<integer<f_x-1>>{});
+    constexpr auto newNumbSum = normalize(NumbSum{} + newNumb);
+    constexpr auto r = newNumbSum;
+
+    using R = decltype(r);
+    using L = X;
+    if constexpr(std::is_same_v<R, L> or tuple_type_count_t<R, Backtrace>::value > 0) {
+        return r;
+    } else {
+        return sin_impl<f_x+2, tuple_cat_t<Backtrace, std::tuple<R>>>(X{}, newNumbSum, newNumb);
+    }
+}
+
+template<typename TN1, typename TD1>
+constexpr auto sin(Number<TN1, TD1> x) {
+    return sin_impl<3>(x, x, x);
+}
+
+template<int f_x, typename Backtrace = std::tuple<>, typename X, typename NumbSum, typename Numb>
+constexpr auto cos_impl(X, NumbSum, Numb) {
+    constexpr auto newNumb = normalize(-Numb{} * X{} * X{} / Number<integer<f_x>>{} / Number<integer<f_x-1>>{});
+    constexpr auto newNumbSum = normalize(NumbSum{} + newNumb);
+    constexpr auto r = newNumbSum;
+
+    using R = decltype(r);
+    using L = X;
+    if constexpr(std::is_same_v<R, L> or tuple_type_count_t<R, Backtrace>::value > 0) {
+        return r;
+    } else {
+        return cos_impl<f_x+2, tuple_cat_t<Backtrace, std::tuple<R>>>(X{}, newNumbSum, newNumb);
+    }
+}
+
+template<typename TN1, typename TD1>
+constexpr auto cos(Number<TN1, TD1> x) {
+    return sin_impl<2>(x, Number<integer<1>>{}, Number<integer<1>>{});
+}
+
+
+inline constexpr auto pi = Number<integer<3141592653589793238>,
+                                  integer<1000000000000000000>>{};
+
 } // namespace d_rive::detail
