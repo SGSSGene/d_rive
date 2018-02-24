@@ -129,3 +129,14 @@ static_assert(pow(3_c, 2_c * x<0>) == pow(9_c, x<0>));
 static_assert(pow(3_c, -1_c) == 1_c/3_c);
 static_assert(pow(9_c, -1_c/2_c) == 1_c/3_c);
 static_assert(1_c / pow(x<0>, -1_c) == x<0>);
+
+static_assert(derive(sin(x<0>)) == cos(x<0>));
+static_assert(derive(sin(x<0>*x<0>)) == cos(x<0>*x<0>) * 2_c*x<0>);
+static_assert(derive(cos(x<0>)) == -sin(x<0>));
+static_assert(derive(-sin(x<0>)) == -cos(x<0>));
+static_assert(derive(-cos(x<0>)) == sin(x<0>));
+
+static_assert( sin(x<0>) == integrate( cos(x<0>)));
+static_assert( cos(x<0>) == integrate(-sin(x<0>)));
+static_assert(-sin(x<0>) == integrate(-cos(x<0>)));
+static_assert(-cos(x<0>) == integrate( sin(x<0>)));

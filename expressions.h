@@ -132,7 +132,65 @@ struct Ln {
     }
 };
 
+template <typename TP = ConstOne>
+struct Sin {
+    using tuple = std::tuple<Sin>;
+    using P = TP;
+    P p;
 
+    template <typename ...Args>
+    auto operator()(Args const&... args) const {
+        return eval_expr_impl(*this, args...);
+    }
+
+    template <typename P>
+    constexpr bool operator==(P const& _other) const {
+        auto s1 = full_simplify(*this);
+        auto s2 = full_simplify(_other);
+        return std::is_same_v<decltype(s1), decltype(s2)>;
+    }
+
+    static void print(std::ostream& stream, PrintType type) {
+        stream << "sin(";
+        P::print(stream, type);
+        stream << ")";
+    }
+
+    friend std::ostream& operator<< (std::ostream& stream, Sin const&) {
+        Sin::print(stream, PrintType::Cpp);
+        return stream;
+    }
+};
+
+template <typename TP = ConstOne>
+struct Cos {
+    using tuple = std::tuple<Cos>;
+    using P = TP;
+    P p;
+
+    template <typename ...Args>
+    auto operator()(Args const&... args) const {
+        return eval_expr_impl(*this, args...);
+    }
+
+    template <typename P>
+    constexpr bool operator==(P const& _other) const {
+        auto s1 = full_simplify(*this);
+        auto s2 = full_simplify(_other);
+        return std::is_same_v<decltype(s1), decltype(s2)>;
+    }
+
+    static void print(std::ostream& stream, PrintType type) {
+        stream << "cos(";
+        P::print(stream, type);
+        stream << ")";
+    }
+
+    friend std::ostream& operator<< (std::ostream& stream, Cos const&) {
+        Cos::print(stream, PrintType::Cpp);
+        return stream;
+    }
+};
 
 template <typename TP1 = ConstZero, typename TP2 = ConstOne>
 struct Exp {
@@ -358,6 +416,25 @@ constexpr auto simplify(Ln<T> v) {
     }
 }
 
+template <typename T>
+constexpr auto simplify(Sin<T> v) {
+    if constexpr(is_same_tpl_v<T, Const<>>) {
+        using N = typename T::N;
+        return Const<decltype(sin(N{}))>{};
+    } else {
+        return Sin<decltype(simplify(v.p))>{};
+    }
+}
+
+template <typename T>
+constexpr auto simplify(Cos<T> v) {
+    if constexpr(is_same_tpl_v<T, Const<>>) {
+        using N = typename T::N;
+        return Const<decltype(cos(N{}))>{};
+    } else {
+        return Cos<decltype(simplify(v.p))>{};
+    }
+}
 
 template <typename P1, typename P2>
 constexpr auto simplify_impl(Exp<P1, P2> value) {
@@ -555,6 +632,15 @@ constexpr auto replace([[maybe_unused]] V var) {
         auto p1 = replace<T1, T2>(var.p1);
         auto p2 = replace<T1, T2>(var.p2);
         return Exp<decltype(p1), decltype(p2)>{};
+    } else if constexpr(is_same_tpl_v<Ln<>, V>) {
+        auto p = replace<T1, T2>(var.p);
+        return Ln<decltype(p)>{};
+    } else if constexpr(is_same_tpl_v<Sin<>, V>) {
+        auto p = replace<T1, T2>(var.p);
+        return Sin<decltype(p)>{};
+    } else if constexpr(is_same_tpl_v<Cos<>, V>) {
+        auto p = replace<T1, T2>(var.p);
+        return Cos<decltype(p)>{};
     } else if constexpr(is_same_tpl_v<Mul<>, V>) {
         return tuple_to<Mul>(std::apply([](auto... e) {
             return std::make_tuple(replace<T1, T2>(e)...);
@@ -600,6 +686,20 @@ auto eval_expr(Var<T>, Tuple const& tuple) {
     return std::get<T::value>(tuple);
 }
 
+template <typename Tuple, typename T>
+auto eval_expr(Ln<T> e, Tuple const& tuple) {
+    return std::log(e(tuple));
+}
+
+template <typename Tuple, typename T>
+auto eval_expr(Sin<T> e, Tuple const& tuple) {
+    return std::sin(e(tuple));
+}
+template <typename Tuple, typename T>
+auto eval_expr(Cos<T> e, Tuple const& tuple) {
+    return std::cos(e(tuple));
+}
+
 template <typename Tuple, typename P1, typename P2>
 auto eval_expr(Exp<P1, P2> e, Tuple const& tuple) {
     using std::pow;
@@ -637,6 +737,14 @@ constexpr auto isConst_impl(Var<integer<n>>) {
 
 template <int nr, typename T>
 constexpr auto isConst_impl(Ln<T> l) {
+    return isConst_impl<nr>(l.p);
+}
+template <int nr, typename T>
+constexpr auto isConst_impl(Sin<T> l) {
+    return isConst_impl<nr>(l.p);
+}
+template <int nr, typename T>
+constexpr auto isConst_impl(Cos<T> l) {
     return isConst_impl<nr>(l.p);
 }
 
@@ -690,6 +798,16 @@ template <int nr, typename T>
 constexpr auto derive_impl(Ln<T> l) {
     return derive_impl<nr>(l.p) / l.p;
 }
+
+template <int nr, typename T>
+constexpr auto derive_impl(Sin<T>) {
+    return Mul<Cos<T>, decltype(derive_impl<nr>(T{}))>{};
+}
+template <int nr, typename T>
+constexpr auto derive_impl(Cos<T>) {
+    return Mul<Const<Number<integer<-1>>>, Sin<T>, decltype(derive_impl<nr>(T{}))>{};
+}
+
 
 
 template <int nr, typename P1, typename P2>
@@ -936,6 +1054,20 @@ constexpr auto integrate_impl(Ln<T> e) {
     return  G{} * ln(e.p) - integrate_impl<nr>(G{} * derive<nr>(e));
 }
 
+template <int nr, typename T>
+constexpr auto integrate_impl(Sin<T>) {
+    auto z = derive(T{}, Var<integer<nr>>{});
+    static_assert(isConst<nr, decltype(z)>(), "can't integrate this function");
+
+    return Mul<Const<Number<integer<-1>>>, Cos<T>, Exp<decltype(z), Const<Number<integer<-1>>>>>{};
+}
+template <int nr, typename T>
+constexpr auto integrate_impl(Cos<T>) {
+    auto z = derive(T{}, Var<integer<nr>>{});
+    static_assert(isConst<nr, decltype(z)>(), "can't integrate this function");
+
+    return Mul<Sin<T>, Exp<decltype(z), Const<Number<integer<-1>>> >>{};
+}
 
 template <int nr, typename P1, typename P2>
 constexpr auto integrate_impl([[maybe_unused]] Exp<P1, P2> e) {
@@ -1036,6 +1168,18 @@ template <typename T1>
 constexpr auto ln(T1 const&) {
     return full_simplify(Ln<T1>{});
 }
+
+template <typename T1>
+constexpr auto sin(T1 const&) {
+    return full_simplify(Sin<T1>{});
+}
+
+template <typename T1>
+constexpr auto cos(T1 const&) {
+    return full_simplify(Cos<T1>{});
+}
+
+
 
 template <integer<>::type n, integer<>::type d = 1>
 using C = Const<decltype(normalize(Number<integer<n>, integer<d>>{}))>;
