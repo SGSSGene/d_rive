@@ -82,7 +82,6 @@ struct Var {
         if (type == PrintType::Cpp) {
             stream << "x<" << int(Var::n) << ">";
         } else if (type == PrintType::WolframAlpha) {
-//            stream << "x_" << int(Var::n);
             if (int(Var::n) != 0) {
                 stream << "c_" <<int(Var::n);
             } else {
@@ -106,7 +105,6 @@ template <typename TP = ConstOne>
 struct Ln {
     using tuple = std::tuple<Ln>;
     using P = TP;
-    P p;
 
     template <typename ...Args>
     auto operator()(Args const&... args) const {
@@ -136,7 +134,6 @@ template <typename TP = ConstOne>
 struct Sin {
     using tuple = std::tuple<Sin>;
     using P = TP;
-    P p;
 
     template <typename ...Args>
     auto operator()(Args const&... args) const {
@@ -166,7 +163,6 @@ template <typename TP = ConstOne>
 struct Cos {
     using tuple = std::tuple<Cos>;
     using P = TP;
-    P p;
 
     template <typename ...Args>
     auto operator()(Args const&... args) const {
@@ -197,8 +193,6 @@ struct Exp {
     using tuple = std::tuple<Exp>;
     using P1 = TP1;
     using P2 = TP2;
-    P1 p1;
-    P2 p2;
 
     template <typename P>
     constexpr bool operator==(P const& _other) const {
@@ -229,7 +223,6 @@ struct Exp {
 template <typename ...Ps>
 struct Mul {
     using tuple = std::tuple<Ps...>;
-    tuple ps;
 
     template <typename P>
     constexpr bool operator==(P const& _other) const {
@@ -270,7 +263,6 @@ struct Mul {
 template <typename ...Ps>
 struct Sum {
     using tuple = std::tuple<Ps...>;
-    tuple ps;
 
 
     template <typename P>
@@ -368,14 +360,14 @@ using element_t = typename element<I, T>::type;
 struct MergeSum {
     template <typename ...Args>
     constexpr auto operator()(Sum<Args...> sum) const {
-        return sum.ps;
+        return typename Sum<Args...>::tuple{};
     }
 };
 
 struct MergeMul {
     template <typename ...Args>
     constexpr auto operator()(Mul<Args...> mul) const {
-        return mul.ps;
+        return typename Mul<Args...>::tuple{};
     }
 };
 
@@ -412,7 +404,7 @@ constexpr auto simplify(Ln<T> v) {
         using N = typename T::N;
         return Const<decltype(ln(N{}))>{};
     } else {
-        return Ln<decltype(simplify(v.p))>{};
+        return Ln<decltype(simplify(T{}))>{};
     }
 }
 
@@ -422,7 +414,7 @@ constexpr auto simplify(Sin<T> v) {
         using N = typename T::N;
         return Const<decltype(sin(N{}))>{};
     } else {
-        return Sin<decltype(simplify(v.p))>{};
+        return Sin<decltype(simplify(T{}))>{};
     }
 }
 
@@ -432,14 +424,14 @@ constexpr auto simplify(Cos<T> v) {
         using N = typename T::N;
         return Const<decltype(cos(N{}))>{};
     } else {
-        return Cos<decltype(simplify(v.p))>{};
+        return Cos<decltype(simplify(T{}))>{};
     }
 }
 
 template <typename P1, typename P2>
 constexpr auto simplify_impl(Exp<P1, P2> value) {
-    auto simplified_p1 = simplify(value.p1);
-    auto simplified_p2 = simplify(value.p2);
+    auto simplified_p1 = simplify(P1{});
+    auto simplified_p2 = simplify(P2{});
 
     auto p1 = simplified_p1;
     auto p2 = simplified_p2;
@@ -462,7 +454,7 @@ constexpr auto simplify([[maybe_unused]] Exp<P1, P2> value) {
         using N2 = typename P2::N;
         return Const<decltype(pow(N1{}, N2{}))>{};
     } else if constexpr(is_same_tpl_v<P1, Mul<>>){
-        return tuple_to<Mul>(tuple_apply_each(value.p1.ps, [](auto e) {
+        return tuple_to<Mul>(tuple_apply_each(typename P1::tuple{}, [](auto e) {
             return std::tuple<Exp<decltype(e), P2>>{};
         }));
     } else if constexpr(is_same_tpl_v<P2, Mul<>> and is_same_tpl_v<P1, Const<>>){
@@ -497,9 +489,9 @@ constexpr auto simplify(Mul<Ps...> const& value) {
     if constexpr (sizeof...(Ps) == 0) {
         return ConstOne {};
     } else if constexpr (sizeof...(Ps) == 1) {
-        return std::get<0>(value.ps);
+        return std::get<0>(typename Mul<Ps...>::tuple{});
     } else {
-        return tuple_to<Mul>(chain(value.ps,
+        return tuple_to<Mul>(chain(typename Mul<Ps...>::tuple{},
             [](auto ps) {
                 return tuple_apply_each(ps, overloaded {
                     [](ConstOne) { return std::make_tuple(); },
@@ -523,7 +515,7 @@ constexpr auto simplify(Mul<Ps...> const& value) {
 
                             return std::tuple<Const<decltype(N1{} * N2{})>>{};
                         } else if constexpr(is_same_tpl_v<T1, Sum<>>) {
-                            return std::make_tuple(tuple_to<Sum>(tuple_apply_each(t1.ps, [&](auto e) {
+                            return std::make_tuple(tuple_to<Sum>(tuple_apply_each(typename T1::tuple{}, [&](auto e) {
                                 return std::tuple<Mul<decltype(e), T2>>{};
                             })));
                         } else if constexpr(is_same_tpl_v<T1, Exp<>>) {
@@ -549,9 +541,9 @@ constexpr auto simplify(Sum<Ps...> const& value) {
     if constexpr (sizeof...(Ps) == 0) {
         return ConstZero {};
     } else if constexpr (sizeof...(Ps) == 1) {
-        return std::get<0>(value.ps);
+        return std::get<0>(typename Sum<Ps...>::tuple{});
     } else {
-        return tuple_to<Sum>(chain(value.ps,
+        return tuple_to<Sum>(chain(typename Sum<Ps...>::tuple{},
             [](auto ps) {
                 return tuple_apply_each(ps, overloaded {
                     [](ConstZero) { return std::make_tuple(); },
@@ -629,26 +621,26 @@ constexpr auto replace([[maybe_unused]] V var) {
     if constexpr(std::is_same_v<T1, V>) {
         return T2{};
     } else if constexpr(is_same_tpl_v<Exp<>, V>) {
-        auto p1 = replace<T1, T2>(var.p1);
-        auto p2 = replace<T1, T2>(var.p2);
+        auto p1 = replace<T1, T2>(typename V::P1{});
+        auto p2 = replace<T1, T2>(typename V::P2{});
         return Exp<decltype(p1), decltype(p2)>{};
     } else if constexpr(is_same_tpl_v<Ln<>, V>) {
-        auto p = replace<T1, T2>(var.p);
+        auto p = replace<T1, T2>(typename V::P{});
         return Ln<decltype(p)>{};
     } else if constexpr(is_same_tpl_v<Sin<>, V>) {
-        auto p = replace<T1, T2>(var.p);
+        auto p = replace<T1, T2>(typename V::P{});
         return Sin<decltype(p)>{};
     } else if constexpr(is_same_tpl_v<Cos<>, V>) {
-        auto p = replace<T1, T2>(var.p);
+        auto p = replace<T1, T2>(typename V::P{});
         return Cos<decltype(p)>{};
     } else if constexpr(is_same_tpl_v<Mul<>, V>) {
         return tuple_to<Mul>(std::apply([](auto... e) {
             return std::make_tuple(replace<T1, T2>(e)...);
-        }, var.ps));
+        }, typename V::tuple{}));
     } else if constexpr(is_same_tpl_v<Sum<>, V>) {
         return tuple_to<Sum>(std::apply([](auto... e) {
             return std::make_tuple(replace<T1, T2>(e)...);
-        }, var.ps));
+        }, typename V::tuple{}));
     } else {
         return V{};
     }
@@ -703,21 +695,21 @@ auto eval_expr(Cos<T> e, Tuple const& tuple) {
 template <typename Tuple, typename P1, typename P2>
 auto eval_expr(Exp<P1, P2> e, Tuple const& tuple) {
     using std::pow;
-    return pow(eval_expr(e.p1, tuple), eval_expr(e.p2, tuple));
+    return pow(eval_expr(P1{}, tuple), eval_expr(P2{}, tuple));
 }
 
 template <typename Tuple, typename ...Ps>
 auto eval_expr(Mul<Ps...> e, Tuple const& tuple) {
     return std::apply([&](auto ...e) {
         return (eval_expr(e, tuple) * ...);
-    }, e.ps);
+    }, typename Mul<Ps...>::tuple{});
 }
 
 template <typename Tuple, typename ...Ps>
 auto eval_expr(Sum<Ps...> e, Tuple const& tuple) {
     return std::apply([&](auto ...e) {
         return (eval_expr(e, tuple) + ...);
-    }, e.ps);
+    }, typename Mul<Ps...>::tuple{});
 }
 
 // ------------------- is const
@@ -737,20 +729,20 @@ constexpr auto isConst_impl(Var<integer<n>>) {
 
 template <int nr, typename T>
 constexpr auto isConst_impl(Ln<T> l) {
-    return isConst_impl<nr>(l.p);
+    return isConst_impl<nr>(T{});
 }
 template <int nr, typename T>
 constexpr auto isConst_impl(Sin<T> l) {
-    return isConst_impl<nr>(l.p);
+    return isConst_impl<nr>(T{});
 }
 template <int nr, typename T>
 constexpr auto isConst_impl(Cos<T> l) {
-    return isConst_impl<nr>(l.p);
+    return isConst_impl<nr>(T{});
 }
 
 template <int nr, typename P1, typename P2>
 constexpr auto isConst_impl(Exp<P1, P2> value) {
-    return isConst_impl<nr>(value.p1) and isConst_impl<nr>(value.p2);
+    return isConst_impl<nr>(P1{}) and isConst_impl<nr>(P2{});
 }
 
 
@@ -758,14 +750,14 @@ template <int nr, typename ...Ps>
 constexpr auto isConst_impl(Mul<Ps...> const& e) {
     return std::apply([](auto ...e){
         return (isConst_impl<nr>(e) and ...);
-    }, e.ps);
+    }, typename Mul<Ps...>::tuple{});
 }
 
 template <int nr, typename ...Ps>
 constexpr auto isConst_impl(Sum<Ps...> const& e) {
     return std::apply([](auto ...e){
         return (isConst_impl<nr>(e) and ...);
-    }, e.ps);
+    }, typename Sum<Ps...>::tuple{});
 }
 
 template<int nr, typename Expr>
@@ -796,7 +788,7 @@ constexpr auto derive_impl(Var<integer<n>>) {
 
 template <int nr, typename T>
 constexpr auto derive_impl(Ln<T> l) {
-    return derive_impl<nr>(l.p) / l.p;
+    return derive_impl<nr>(T{}) / T{};
 }
 
 template <int nr, typename T>
@@ -814,13 +806,13 @@ template <int nr, typename P1, typename P2>
 constexpr auto derive_impl(Exp<P1, P2> value) {
     if constexpr(is_same_tpl_v<P2, Const<>>) {
         using Outer = Sum<P2, Const<Number<integer<-1>>>>;
-        auto inner = derive_impl<nr>(value.p1);
+        auto inner = derive_impl<nr>(P1{});
        return Mul<P2, Exp<P1, Outer>, decltype(inner)>{};
     } else {
         constexpr auto p1 = derive_impl<nr>(P1{});
         constexpr auto p2 = derive_impl<nr>(P2{});
 
-        return (p2 * Ln<decltype(value.p1)>{} + value.p2 * p1 / value.p1) * pow(value.p1, value.p2);
+        return (p2 * Ln<P1>{} + P2{} * p1 / P1{}) * pow(P1{}, P2{});
     }
 }
 
@@ -979,9 +971,9 @@ template<int nr, typename Expr2, typename P1, typename P2>
 constexpr auto solve_impl(Expr2 e2, Exp<P1, P2> e) {
     static_assert(isConst<nr, P1>() or isConst<nr, P2>());
     if constexpr(isConst<nr, P1>()) {
-        return solve_impl<nr>(ln(e2) / ln(e.p1), e.p2);
+        return solve_impl<nr>(ln(e2) / ln(P1{}), P2{});
     } else {
-        return solve_impl<nr>(pow(e2, 1_c / e.p2), e.p1);
+        return solve_impl<nr>(pow(e2, 1_c / P2{}), P1{});
     }
 }
 
@@ -1051,7 +1043,7 @@ constexpr auto integrate_impl(Var<integer<n>>) {
 template <int nr, typename T>
 constexpr auto integrate_impl(Ln<T> e) {
     using G = Var<integer<nr>>;
-    return  G{} * ln(e.p) - integrate_impl<nr>(G{} * derive<nr>(e));
+    return  G{} * ln(T{}) - integrate_impl<nr>(G{} * derive<nr>(e));
 }
 
 template <int nr, typename T>
@@ -1076,9 +1068,9 @@ constexpr auto integrate_impl([[maybe_unused]] Exp<P1, P2> e) {
     if constexpr (isConst<nr, P1>() and isConst<nr, P2>()) {
         return e * Var<integer<nr>>{};
     } else if constexpr (isConst<nr, P2>()) {
-        return 1_c/(e.p2+1_c) * pow(e.p1, e.p2+1_c);
+        return 1_c/(P2{}+1_c) * pow(P1{}, P2{}+1_c);
     } else if constexpr (is_same_tpl_v<P2, Var<>>) {
-        return pow(e.p1, e.p2) / ln(e.p1);
+        return pow(P1{}, P2{}) / ln(P1{});
     } else if constexpr (isConst<nr, P1>()) {
         static_assert(not isConst<nr, P2>());
         constexpr auto z = derive(P2{}, Var<integer<nr>>{});

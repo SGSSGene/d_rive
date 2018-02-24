@@ -140,3 +140,10 @@ static_assert( sin(x<0>) == integrate( cos(x<0>)));
 static_assert( cos(x<0>) == integrate(-sin(x<0>)));
 static_assert(-sin(x<0>) == integrate(-cos(x<0>)));
 static_assert(-cos(x<0>) == integrate( sin(x<0>)));
+
+static_assert(sizeof(pow(pow(x<0>, 2_c),-1_c)) == 1);
+static_assert(sizeof(derive(2_c)) == 1);
+static_assert(sizeof(derive(x<0>)) == 1);
+static_assert(sizeof(derive(-cos(x<0>))) == 1);
+static_assert(sizeof(3_c  - 1_c) == 1);
+
