@@ -46,7 +46,7 @@ Integrating?
 ```
 Compile time roots?
 ```
-    std::cout << pow(2_c, 0.5_c) << "\n";
+    std::cout << (2_c^0.5_c) << "\n";
 ```
 Multiple variables:
 ```
@@ -58,7 +58,7 @@ Multiple variables:
 
 Lets go crazy:
 ```
-    auto f = 10_c + pow(3_c * x<0>, 0.5_c * x<1> * x<2> - x<1>);
+    auto f = 10_c + ((3_c * x<0>) ^ (0.5_c * x<1> * x<2> - x<1>));
     std::cout << derive(f, x<0>) << "\n";
     std::cout << derive(f, x<1>) << "\n";
     std::cout << derive(f, x<2>) << "\n";
