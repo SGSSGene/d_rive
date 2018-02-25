@@ -26,41 +26,34 @@ enum class PrintType {
     WolframAlpha
 };
 
+template<typename T, typename ...Ps>
+struct EntityBase {
+    using tuple = std::tuple<Ps...>;
+    template <typename ...Args>
+    auto operator()(Args const&... args) const {
+        return eval_expr_impl(T{}, args...);
+    }
+
+    template <typename P>
+    constexpr bool operator==(P const&) const {
+        auto s1 = full_simplify(T{});
+        auto s2 = full_simplify(P{});
+        return std::is_same_v<decltype(s1), decltype(s2)>;
+    }
+
+    auto operator<< (std::ostream& stream) -> std::ostream& {
+        return stream << to_string(T{}, PrintType::Cpp);
+    }
+};
+
 template <typename T = Number<>>
-struct Const {
+struct Const : EntityBase<Const<T>, Const<T>> {
     using N = T;
-    using tuple = std::tuple<Const>;
 
     static_assert(is_same_tpl_v<Number<>, T>);
 
     constexpr static double value() {
         return N::value();
-    }
-
-    template <typename ...Args>
-    auto operator()(Args const&... args) const {
-        return eval_expr_impl(*this, args...);
-    }
-
-
-    template <typename P>
-    constexpr bool operator==(P const& _other) const {
-        auto s1 = full_simplify(*this);
-        auto s2 = full_simplify(_other);
-        return std::is_same_v<decltype(s1), decltype(s2)>;
-    }
-
-    static void print(std::ostream& stream, PrintType type) {
-        if (type == PrintType::Cpp) {
-            stream << Const::value() << "_c";
-        } else if (type == PrintType::WolframAlpha) {
-            stream << Const::value();
-        }
-    }
-
-    friend std::ostream& operator<< (std::ostream& stream, Const const&) {
-        Const::print(stream, PrintType::Cpp);
-        return stream;
     }
 };
 
@@ -68,240 +61,39 @@ using ConstZero = Const<>;
 using ConstOne  = Const<Number<integer<1>>>;
 
 template <typename T = integer<0>>
-struct Var {
-    using tuple = std::tuple<Var>;
-
+struct Var : EntityBase<Var<T>, Var<T>> {
     static inline constexpr auto n = T::value;
-
-    template <typename ...Args>
-    auto operator()(Args const&... args) const {
-        return eval_expr_impl(*this, args...);
-    }
-
-    static void print(std::ostream& stream, PrintType type) {
-        if (type == PrintType::Cpp) {
-            stream << "x<" << int(Var::n) << ">";
-        } else if (type == PrintType::WolframAlpha) {
-            if (int(Var::n) != 0) {
-                stream << "c_" <<int(Var::n);
-            } else {
-                stream << "x";
-            }
-        }
-    }
-
-    template <typename P>
-    constexpr bool operator==(P const&) const {
-        return std::is_same_v<P, Var>;
-    }
-
-    friend std::ostream& operator<< (std::ostream& stream, Var const&) {
-        Var::print(stream, PrintType::Cpp);
-        return stream;
-    }
 };
 
 template <typename TP = ConstOne>
-struct Ln {
-    using tuple = std::tuple<Ln>;
+struct Ln : EntityBase<Ln<TP>, Ln<TP>> {
     using P = TP;
-
-    template <typename ...Args>
-    auto operator()(Args const&... args) const {
-        return eval_expr_impl(*this, args...);
-    }
-
-    template <typename P>
-    constexpr bool operator==(P const& _other) const {
-        auto s1 = full_simplify(*this);
-        auto s2 = full_simplify(_other);
-        return std::is_same_v<decltype(s1), decltype(s2)>;
-    }
-
-    static void print(std::ostream& stream, PrintType type) {
-        stream << "ln(";
-        P::print(stream, type);
-        stream << ")";
-    }
-
-    friend std::ostream& operator<< (std::ostream& stream, Ln const&) {
-        Ln::print(stream, PrintType::Cpp);
-        return stream;
-    }
 };
 
 template <typename TP = ConstOne>
-struct Sin {
-    using tuple = std::tuple<Sin>;
+struct Sin : EntityBase<Sin<TP>, Sin<TP>> {
     using P = TP;
-
-    template <typename ...Args>
-    auto operator()(Args const&... args) const {
-        return eval_expr_impl(*this, args...);
-    }
-
-    template <typename P>
-    constexpr bool operator==(P const& _other) const {
-        auto s1 = full_simplify(*this);
-        auto s2 = full_simplify(_other);
-        return std::is_same_v<decltype(s1), decltype(s2)>;
-    }
-
-    static void print(std::ostream& stream, PrintType type) {
-        stream << "sin(";
-        P::print(stream, type);
-        stream << ")";
-    }
-
-    friend std::ostream& operator<< (std::ostream& stream, Sin const&) {
-        Sin::print(stream, PrintType::Cpp);
-        return stream;
-    }
 };
 
 template <typename TP = ConstOne>
-struct Cos {
-    using tuple = std::tuple<Cos>;
+struct Cos : EntityBase<Cos<TP>, Cos<TP>> {
     using P = TP;
-
-    template <typename ...Args>
-    auto operator()(Args const&... args) const {
-        return eval_expr_impl(*this, args...);
-    }
-
-    template <typename P>
-    constexpr bool operator==(P const& _other) const {
-        auto s1 = full_simplify(*this);
-        auto s2 = full_simplify(_other);
-        return std::is_same_v<decltype(s1), decltype(s2)>;
-    }
-
-    static void print(std::ostream& stream, PrintType type) {
-        stream << "cos(";
-        P::print(stream, type);
-        stream << ")";
-    }
-
-    friend std::ostream& operator<< (std::ostream& stream, Cos const&) {
-        Cos::print(stream, PrintType::Cpp);
-        return stream;
-    }
 };
 
 template <typename TP1 = ConstZero, typename TP2 = ConstOne>
-struct Exp {
-    using tuple = std::tuple<Exp>;
+struct Exp : EntityBase<Exp<TP1, TP2>, Exp<TP1, TP2>> {
     using P1 = TP1;
     using P2 = TP2;
-
-    template <typename P>
-    constexpr bool operator==(P const& _other) const {
-        auto s1 = full_simplify(*this);
-        auto s2 = full_simplify(_other);
-        return std::is_same_v<decltype(s1), decltype(s2)>;
-    }
-
-    template <typename ...Args>
-    auto operator()(Args const&... args) const {
-        return eval_expr_impl(*this, args...);
-    }
-
-    static void print(std::ostream& stream, PrintType type) {
-        stream << "(";
-        P1::print(stream, type);
-        stream << "^ ";
-        P2::print(stream, type);
-        stream << ")";
-    }
-
-    friend std::ostream& operator<< (std::ostream& stream, Exp const&) {
-        Exp::print(stream, PrintType::Cpp);
-        return stream;
-    }
 };
 
 template <typename ...Ps>
-struct Mul {
-    using tuple = std::tuple<Ps...>;
-
-    template <typename P>
-    constexpr bool operator==(P const& _other) const {
-        auto s1 = full_simplify(*this);
-        auto s2 = full_simplify(_other);
-        return std::is_same_v<decltype(s1), decltype(s2)>;
-    }
-
-    template <typename ...Args>
-    auto operator()(Args const&... args) const {
-        return eval_expr_impl(*this, args...);
-    }
-
-
-    static void print(std::ostream& stream, PrintType type) {
-        stream << "(";
-        if constexpr (sizeof...(Ps) == 0) {
-            ConstOne::print(stream, type);
-        } else {
-            std::apply([&](auto e1, auto... tail) {
-                decltype(e1)::print(stream, type);
-                [[maybe_unused]] auto f = [&](auto e) {
-                    stream << " * ";
-                    decltype(e)::print(stream, type);
-                };
-                (f(tail), ...);
-            }, tuple{});
-        }
-        stream << ")";
-    }
-
-    friend std::ostream& operator<< (std::ostream& stream, Mul const&) {
-        Mul::print(stream, PrintType::Cpp);
-        return stream;
-    }
-};
+struct Mul : EntityBase<Mul<Ps...>, Ps...> {};
 
 template <typename ...Ps>
-struct Sum {
-    using tuple = std::tuple<Ps...>;
+struct Sum : EntityBase<Sum<Ps...>, Ps...> {};
 
 
-    template <typename P>
-    constexpr bool operator==(P const& _other) const {
-        auto s1 = full_simplify(*this);
-        auto s2 = full_simplify(_other);
-        return std::is_same_v<decltype(s1), decltype(s2)>;
-    }
-
-
-    template <typename ...Args>
-    auto operator()(Args const&... args) const {
-        return eval_expr_impl(*this, args...);
-    }
-
-
-    static void print(std::ostream& stream, PrintType type) {
-        stream << "(";
-        if constexpr (sizeof...(Ps) == 0) {
-            ConstZero::print(stream, type);
-        } else {
-            std::apply([&](auto e1, auto... tail) {
-                decltype(e1)::print(stream, type);
-                auto f = [&](auto e) {
-                    stream << " + ";
-                    decltype(e)::print(stream, type);
-                };
-                (f(tail), ...);
-            }, tuple{});
-        }
-        stream << ")";
-    }
-
-    friend std::ostream& operator<< (std::ostream& stream, Sum const&) {
-        Sum::print(stream, PrintType::Cpp);
-        return stream;
-    }
-};
-
+// -------------- some helper funktions
 
 template <typename Tuple, template<class...> typename Op>
 struct TupleTo;
@@ -387,6 +179,88 @@ constexpr auto chain(Data const& data) {
     return data;
 }
 
+// ------------------- to_string
+
+
+template <typename T>
+auto to_string_impl(Const<T>, PrintType type) {
+    using std::to_string;
+    if (type == PrintType::Cpp) {
+        return to_string(Const<T>::value()) + "_c";
+    } else if (type == PrintType::WolframAlpha) {
+        return to_string(Const<T>::value());
+    }
+    throw std::runtime_error("Unknown print type");
+}
+
+template <typename T>
+auto to_string_impl(Var<T>, PrintType type) -> std::string {
+    using std::to_string;
+    if (type == PrintType::Cpp) {
+        return "x<" + to_string(int(Var<T>::n)) + ">";
+    } else if (type == PrintType::WolframAlpha) {
+        if (int(Var<T>::n) != 0) {
+            return "c_" + to_string(int(Var<T>::n));
+        }
+        return "x";
+    }
+    throw std::runtime_error("Unknown print type");
+}
+
+
+template <typename TP>
+auto to_string_impl(Ln<TP>, PrintType type) {
+    return "ln(" + to_string(TP{}, type) + ")";
+}
+template <typename TP>
+auto to_string_impl(Sin<TP>, PrintType type) {
+    return "sin(" + to_string(TP{}, type) + ")";
+}
+template <typename TP>
+auto to_string_impl(Cos<TP>, PrintType type) {
+    return "cos(" + to_string(TP{}, type) + ")";
+}
+
+template <typename TP1, typename TP2>
+auto to_string_impl(Exp<TP1, TP2>, PrintType type) {
+    return "(" + to_string(TP1{}, type) + "^" + to_string(TP2{},type) + ")";
+}
+
+template <typename ...Ps>
+auto to_string_multi_impl(std::string_view op, std::tuple<Ps...>, PrintType type) {
+    return "(" + std::apply([&](auto e1, auto... tail) {
+        auto s = to_string(e1, type);
+        [[maybe_unused]] auto f = [&](auto e) {
+            return op + to_string(e, type);
+        };
+        return (s + ... + f(tail));
+    }, std::tuple<Ps...>{}) +")";
+}
+
+template <typename ...Ps>
+auto to_string_impl(Mul<Ps...>, PrintType type) {
+    if constexpr (sizeof...(Ps) == 0) {
+        return to_string_impl(ConstOne{}, type);
+    } else {
+        return to_string_multi_impl(" * ", std::tuple<Ps...>{}, type);
+    }
+}
+
+template <typename ...Ps>
+auto to_string_impl(Sum<Ps...>, PrintType type) {
+    if constexpr (sizeof...(Ps) == 0) {
+        return to_string_impl(ConstZero{}, type);
+    } else {
+        return to_string_multi_impl(" * ", std::tuple<Ps...>{}, type);
+    }
+}
+
+template <typename Expr>
+auto to_string(Expr e, PrintType type = PrintType::Cpp) {
+    return to_string_impl(e, type);
+}
+
+// ------------------- simplify
 
 template <typename T>
 constexpr auto simplify(Const<T> v) {
@@ -647,6 +521,9 @@ constexpr auto replace([[maybe_unused]] V var) {
 }
 
 
+// ------------------- eval expressions
+
+
 template<integer<>::type nr, typename T>
 auto set(T) {
     return std::tuple<Var<integer<nr>>, T>{};
@@ -844,6 +721,8 @@ constexpr auto derive(Expr e, Head) {
     }
 }
 
+// ------------------- partial derivative
+
 template<typename Expr>
 auto partial_derive(Expr) {
     return std::make_tuple();
@@ -853,6 +732,7 @@ template<typename Expr, typename Head, typename ...Args>
 auto partial_derive(Expr e, Head head, Args... args) {
     return std::tuple_cat(std::make_tuple(derive(e, head)), partial_derive(e, args...));
 }
+// ------------------- parsing
 
 template <unsigned delCt>
 constexpr bool isValidDoubleImpl() {
@@ -1120,7 +1000,7 @@ constexpr auto integrate(Expr, Head) {
 }
 
 
-// ------------------- full_simplify
+// ------------------- operator
 
 template <typename T1, typename T2>
 constexpr auto operator+(T1 const&, T2 const&) {
