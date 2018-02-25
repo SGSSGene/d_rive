@@ -312,3 +312,39 @@ static_assert(std::abs(cos(Number<integer<66>, integer<10>>{}).value() -  0.9502
 static_assert(std::abs(cos(Number<integer<67>, integer<10>>{}).value() -  0.914383) < 1e-3);
 static_assert(std::abs(cos(Number<integer<68>, integer<10>>{}).value() -  0.869397) < 1e-3);
 static_assert(std::abs(cos(Number<integer<69>, integer<10>>{}).value() -  0.815725) < 1e-3);
+
+static_assert(abs(Number<integer<10>>{}).value() == 10);
+static_assert(abs(Number<integer<-5>>{}).value() == 5);
+static_assert(abs(Number<integer<0>>{}).value() == 0);
+
+static_assert(sign(Number<integer<10>>{}).value() == 1);
+static_assert(sign(Number<integer<-5>>{}).value() == -1);
+static_assert(sign(Number<integer<0>>{}).value() == 0);
+
+static_assert(number::min(Number<integer<10>>{}).value() == 10);
+static_assert(number::min(Number<integer<-5>>{}).value() == -5);
+static_assert(number::min(Number<integer<0>>{}).value() == 0);
+
+static_assert(number::min(Number<integer<10>>{}, Number<integer<11>>{}).value() == 10);
+static_assert(number::min(Number<integer<-5>>{}, Number<integer<11>>{}).value() == -5);
+static_assert(number::min(Number<integer< 0>>{}, Number<integer<11>>{}).value() == 0);
+
+static_assert(number::min(Number<integer<-3>>{}, Number<integer<10>>{}, Number<integer<11>>{}).value() == -3);
+static_assert(number::min(Number<integer<-3>>{}, Number<integer<-5>>{}, Number<integer<11>>{}).value() == -5);
+static_assert(number::min(Number<integer<-3>>{}, Number<integer< 0>>{}, Number<integer<11>>{}).value() == -3);
+
+static_assert(number::max(Number<integer<10>>{}).value() == 10);
+static_assert(number::max(Number<integer<-5>>{}).value() == -5);
+static_assert(number::max(Number<integer< 0>>{}).value() == 0);
+
+static_assert(number::max(Number<integer<10>>{}, Number<integer<11>>{}).value() == 11);
+static_assert(number::max(Number<integer<-5>>{}, Number<integer<11>>{}).value() == 11);
+static_assert(number::max(Number<integer< 0>>{}, Number<integer<11>>{}).value() == 11);
+
+static_assert(number::max(Number<integer<-3>>{}, Number<integer<10>>{}, Number<integer<4>>{}).value() == 10);
+static_assert(number::max(Number<integer<-3>>{}, Number<integer<-5>>{}, Number<integer<4>>{}).value() == 4);
+static_assert(number::max(Number<integer<-3>>{}, Number<integer< 0>>{}, Number<integer<4>>{}).value() == 4);
+
+
+
+

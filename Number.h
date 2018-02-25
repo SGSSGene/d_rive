@@ -238,6 +238,60 @@ constexpr auto log(Number<TN2, TD2> _base, Number<TN1, TD1> _n) {
     return ln(_n) / ln(_base);
 }
 
+template<typename TN1, typename TD1>
+constexpr auto sign(Number<TN1, TD1> _n) {
+    if constexpr (TN1::value > 0) {
+        return Number<integer<1>>{};
+    } else if constexpr (TN1::value < 0) {
+        return Number<integer<-1>>{};
+    } else {
+        return Number<>{};
+    }
+}
+
+template<typename TN1, typename TD1>
+constexpr auto abs(Number<TN1, TD1> _n) {
+    return Number<decltype(abs(TN1{})), TD1>{};
+}
+
+namespace number {
+template<typename Head, typename ...N>
+constexpr auto min(Head, N...) {
+    if constexpr(sizeof...(N) == 0) {
+        return Head{};
+    } else {
+        constexpr auto e = min(N{}...);
+        constexpr auto s = sign(Head{} - e);
+        if constexpr (s.value() <= 0) {
+            return Head{};
+        } else {
+            return e;
+        }
+    }
+}
+
+template<typename Head, typename ...N>
+constexpr auto max(Head, N...) {
+    if constexpr(sizeof...(N) == 0) {
+        return Head{};
+    } else {
+        constexpr auto e = max(N{}...);
+        constexpr auto s = sign(Head{} - e);
+        if constexpr (s.value() >= 0) {
+            return Head{};
+        } else {
+            return e;
+        }
+    }
+}
+
+
+
+}
+
+
+
+
 template<int f_x, typename Backtrace = std::tuple<>, typename X, typename NumbSum, typename Numb>
 constexpr auto sin_impl(X, NumbSum, Numb) {
     constexpr auto newNumb = normalize(-Numb{} * X{} * X{} / Number<integer<f_x>>{} / Number<integer<f_x-1>>{});
