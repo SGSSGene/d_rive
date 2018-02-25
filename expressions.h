@@ -1,11 +1,12 @@
 #pragma once
 #include "tuple.h"
-#include <numeric>
-#include <cstdint>
-#include <ostream>
-#include <cmath>
-
 #include "Number.h"
+
+#include <cmath>
+#include <cstdint>
+#include <numeric>
+#include <ostream>
+#include <sstream>
 
 namespace d_rive::detail {
 
@@ -41,7 +42,7 @@ struct EntityBase {
         return std::is_same_v<decltype(s1), decltype(s2)>;
     }
 
-    auto operator<< (std::ostream& stream) -> std::ostream& {
+    friend auto operator<< (std::ostream& stream, EntityBase) -> std::ostream& {
         return stream << to_string(T{}, PrintType::Cpp);
     }
 };
@@ -62,7 +63,7 @@ using ConstOne  = Const<Number<integer<1>>>;
 
 template <typename T = integer<0>>
 struct Var : EntityBase<Var<T>, Var<T>> {
-    static inline constexpr auto n = T::value;
+    using N = T;
 };
 
 template <typename TP = ConstOne>
@@ -92,8 +93,194 @@ struct Mul : EntityBase<Mul<Ps...>, Ps...> {};
 template <typename ...Ps>
 struct Sum : EntityBase<Sum<Ps...>, Ps...> {};
 
+// ------------------- Parsing, _c option
 
-// -------------- some helper funktions
+template <unsigned delCt>
+constexpr bool isValidDoubleImpl() {
+    return delCt == 0 or delCt == 1;
+}
+template <unsigned delCt, char digit, char... tail>
+constexpr bool isValidDoubleImpl() {
+    if constexpr(digit != '.' and (digit < '0' or digit > '9')) {
+        return false;
+    }
+    return isValidDoubleImpl<delCt + int(digit == '.'), tail...>();
+}
+
+template <char... tail>
+constexpr bool isValidDouble() {
+    return isValidDoubleImpl<0, tail...>();
+}
+
+
+static_assert(isValidDouble<'1', '.', '2'>());
+static_assert(isValidDouble<'.', '2'>());
+static_assert(isValidDouble<'.'>());
+static_assert(isValidDouble<>());
+static_assert(isValidDouble<'1' >());
+static_assert(isValidDouble<'1', '.' >());
+static_assert(not isValidDouble<'1', '.', '.' >());
+
+template <char... args>
+struct char_tuple {
+    const static std::string value;
+    const static size_t size = sizeof...(args);
+};
+
+template <char... args>
+const std::string char_tuple<args...>::value{args...};
+
+
+template <bool hasSplit, char del, typename P1, typename P2, char... args>
+struct split;
+
+template <bool hasSplit, char del, char ...args1, char ...args2>
+struct split<hasSplit, del, char_tuple<args1...>, char_tuple<args2...>> {
+    using P1 = char_tuple<args1...>;
+    using P2 = char_tuple<args2...>;
+};
+
+template<char del, char ...args1, char ...args2, char head, char ...tail>
+struct split<false, del, char_tuple<args1...>, char_tuple<args2...>, head, tail...> {
+    using NextSplit = split<false, del, char_tuple<args1..., head>, char_tuple<args2...>, tail...>;
+    using P1 = typename NextSplit::P1;
+    using P2 = typename NextSplit::P2;
+};
+
+template<char del, char ...args1, char ...args2, char ...tail>
+struct split<false, del, char_tuple<args1...>, char_tuple<args2...>, del, tail...> {
+    using NextSplit = split<true, del, char_tuple<args1...>, char_tuple<args2...>, tail...>;
+    using P1 = typename NextSplit::P1;
+    using P2 = typename NextSplit::P2;
+};
+
+
+template<char del, char ...args1, char ...args2, char head, char ...tail>
+struct split<true, del, char_tuple<args1...>, char_tuple<args2...>, head, tail...> {
+    using NextSplit = split<true, del, char_tuple<args1...>, char_tuple<args2..., head>, tail...>;
+    using P1 = typename NextSplit::P1;
+    using P2 = typename NextSplit::P2;
+};
+
+template <typename value, typename P1>
+struct stoi;
+
+template <typename Integer>
+struct stoi<Integer, char_tuple<>> {
+    using type = Integer;
+};
+
+template <typename Integer, char head, char... tail>
+struct stoi<Integer, char_tuple<head, tail...>> {
+    using type = typename stoi<integer<Integer::value * 10 + (head - '0')>, char_tuple<tail...>>::type;
+};
+
+template <char... args>
+constexpr auto operator "" _c() {
+    static_assert(isValidDouble<args...>());
+    using Split = split<false, '.', char_tuple<>, char_tuple<>, args...>;
+    using I1 = typename stoi<integer<0>, typename Split::P1>::type;
+    using I2 = typename stoi<integer<0>, typename Split::P2>::type;
+    using Shift = decltype(pow(Number<integer<10>>{}, integer<Split::P2::size>{}));
+    auto constexpr shift = Shift::N::value;
+    using N = decltype(normalize(Number<integer<I1::value * shift + I2::value>, integer<shift>>{}));
+    return Const<N>{};
+}
+
+// ------------------- to_string
+
+template <typename T>
+auto to_string_impl(Const<T>, PrintType type) {
+    std::string valueAsStr = [&] () {
+        using TT = decltype(Const<T>::value());
+        if constexpr(std::is_same_v<TT, double> or std::is_same_v<TT, float>) {
+            std::stringstream ss;
+            ss << Const<T>::value();
+            return ss.str();
+        } else {
+            using std::to_string;
+            return to_string(Const<T>::value());
+        }
+    }();
+
+    if (type == PrintType::Cpp) {
+        return valueAsStr + "_c";
+    } else if (type == PrintType::WolframAlpha) {
+        return valueAsStr;
+    }
+    throw std::runtime_error("Unknown print type");
+}
+
+template <typename T>
+auto to_string_impl(Var<T>, PrintType type) -> std::string {
+    using std::to_string;
+    constexpr auto n = int(Var<T>::N::value);
+    if (type == PrintType::Cpp) {
+        return "x<" + to_string(n) + ">";
+    } else if (type == PrintType::WolframAlpha) {
+        if (n != 0) {
+            return "c_" + to_string(n);
+        }
+        return "x";
+    }
+    throw std::runtime_error("Unknown print type");
+}
+
+
+template <typename TP>
+auto to_string_impl(Ln<TP>, PrintType type) {
+    return "ln(" + to_string(TP{}, type) + ")";
+}
+template <typename TP>
+auto to_string_impl(Sin<TP>, PrintType type) {
+    return "sin(" + to_string(TP{}, type) + ")";
+}
+template <typename TP>
+auto to_string_impl(Cos<TP>, PrintType type) {
+    return "cos(" + to_string(TP{}, type) + ")";
+}
+
+template <typename TP1, typename TP2>
+auto to_string_impl(Exp<TP1, TP2>, PrintType type) {
+    return "(" + to_string(TP1{}, type) + "^" + to_string(TP2{},type) + ")";
+}
+
+template <typename ...Ps>
+auto to_string_multi_impl(std::string_view op, std::tuple<Ps...>, PrintType type) {
+    return "(" + std::apply([&](auto e1, auto... tail) {
+        auto s = to_string(e1, type);
+        [[maybe_unused]] auto f = [&](auto e) {
+            return std::string(op) + to_string(e, type);
+        };
+        return (s + ... + f(tail));
+    }, std::tuple<Ps...>{}) +")";
+}
+
+template <typename ...Ps>
+auto to_string_impl(Mul<Ps...>, PrintType type) {
+    if constexpr (sizeof...(Ps) == 0) {
+        return to_string_impl(1_c, type);
+    } else {
+        return to_string_multi_impl(" * ", std::tuple<Ps...>{}, type);
+    }
+}
+
+template <typename ...Ps>
+auto to_string_impl(Sum<Ps...>, PrintType type) {
+    if constexpr (sizeof...(Ps) == 0) {
+        return to_string_impl(0_c, type);
+    } else {
+        return to_string_multi_impl(" * ", std::tuple<Ps...>{}, type);
+    }
+}
+
+template <typename Expr>
+auto to_string(Expr e, PrintType type = PrintType::Cpp) {
+    return to_string_impl(e, type);
+}
+
+
+// -------------- some helper functions for simplify
 
 template <typename Tuple, template<class...> typename Op>
 struct TupleTo;
@@ -177,87 +364,6 @@ constexpr auto chain(Data const& data, L l, Ls... ls) {
 template<typename Data>
 constexpr auto chain(Data const& data) {
     return data;
-}
-
-// ------------------- to_string
-
-
-template <typename T>
-auto to_string_impl(Const<T>, PrintType type) {
-    using std::to_string;
-    if (type == PrintType::Cpp) {
-        return to_string(Const<T>::value()) + "_c";
-    } else if (type == PrintType::WolframAlpha) {
-        return to_string(Const<T>::value());
-    }
-    throw std::runtime_error("Unknown print type");
-}
-
-template <typename T>
-auto to_string_impl(Var<T>, PrintType type) -> std::string {
-    using std::to_string;
-    if (type == PrintType::Cpp) {
-        return "x<" + to_string(int(Var<T>::n)) + ">";
-    } else if (type == PrintType::WolframAlpha) {
-        if (int(Var<T>::n) != 0) {
-            return "c_" + to_string(int(Var<T>::n));
-        }
-        return "x";
-    }
-    throw std::runtime_error("Unknown print type");
-}
-
-
-template <typename TP>
-auto to_string_impl(Ln<TP>, PrintType type) {
-    return "ln(" + to_string(TP{}, type) + ")";
-}
-template <typename TP>
-auto to_string_impl(Sin<TP>, PrintType type) {
-    return "sin(" + to_string(TP{}, type) + ")";
-}
-template <typename TP>
-auto to_string_impl(Cos<TP>, PrintType type) {
-    return "cos(" + to_string(TP{}, type) + ")";
-}
-
-template <typename TP1, typename TP2>
-auto to_string_impl(Exp<TP1, TP2>, PrintType type) {
-    return "(" + to_string(TP1{}, type) + "^" + to_string(TP2{},type) + ")";
-}
-
-template <typename ...Ps>
-auto to_string_multi_impl(std::string_view op, std::tuple<Ps...>, PrintType type) {
-    return "(" + std::apply([&](auto e1, auto... tail) {
-        auto s = to_string(e1, type);
-        [[maybe_unused]] auto f = [&](auto e) {
-            return op + to_string(e, type);
-        };
-        return (s + ... + f(tail));
-    }, std::tuple<Ps...>{}) +")";
-}
-
-template <typename ...Ps>
-auto to_string_impl(Mul<Ps...>, PrintType type) {
-    if constexpr (sizeof...(Ps) == 0) {
-        return to_string_impl(ConstOne{}, type);
-    } else {
-        return to_string_multi_impl(" * ", std::tuple<Ps...>{}, type);
-    }
-}
-
-template <typename ...Ps>
-auto to_string_impl(Sum<Ps...>, PrintType type) {
-    if constexpr (sizeof...(Ps) == 0) {
-        return to_string_impl(ConstZero{}, type);
-    } else {
-        return to_string_multi_impl(" * ", std::tuple<Ps...>{}, type);
-    }
-}
-
-template <typename Expr>
-auto to_string(Expr e, PrintType type = PrintType::Cpp) {
-    return to_string_impl(e, type);
 }
 
 // ------------------- simplify
@@ -520,9 +626,62 @@ constexpr auto replace([[maybe_unused]] V var) {
     }
 }
 
+// ------------------- operator
+
+template <typename T1, typename T2>
+constexpr auto operator+(T1 const&, T2 const&) {
+    return full_simplify(Sum<T1, T2>{});
+}
+
+template <typename T1, typename T2>
+constexpr auto operator*(T1 const&, T2 const&) {
+    return full_simplify(Mul<T1, T2>{});
+}
+
+template <typename T1, typename T2>
+constexpr auto operator/(T1 const&, T2 const&) {
+    return full_simplify(Mul<T1, Exp<T2, Const<Number<integer<-1>>>>>{});
+}
+
+template <typename T1>
+constexpr auto operator-(T1 const&) {
+    return full_simplify(Mul<Const<Number<integer<-1>>>, T1>{});
+}
+template <typename T1, typename T2>
+constexpr auto operator-(T1 const&, T2 const&) {
+    return full_simplify(Sum<T1, Mul<Const<Number<integer<-1>>>, T2>>{});
+}
+
+template <typename T1, typename T2>
+constexpr auto pow(T1 const&, T2 const&) {
+    return full_simplify(Exp<T1, T2>{});
+}
+template <typename T1, typename T2>
+constexpr auto operator^(T1 const p1, T2 const& p2) {
+    return pow(p1, p2);
+}
+
+
+template <typename T1>
+constexpr auto ln(T1 const&) {
+    return full_simplify(Ln<T1>{});
+}
+
+template <typename T1>
+constexpr auto sin(T1 const&) {
+    return full_simplify(Sin<T1>{});
+}
+
+template <typename T1>
+constexpr auto cos(T1 const&) {
+    return full_simplify(Cos<T1>{});
+}
+
+
+
+
 
 // ------------------- eval expressions
-
 
 template<integer<>::type nr, typename T>
 auto set(T) {
@@ -544,7 +703,6 @@ auto eval_expr_impl(Expr e, Args... args) {
     return eval_expr(e, std::make_tuple(args...));
 }
 
-
 template <typename Tuple, typename T>
 auto eval_expr(Const<T>, Tuple const&) {
     return Const<T>::value();
@@ -557,16 +715,19 @@ auto eval_expr(Var<T>, Tuple const& tuple) {
 
 template <typename Tuple, typename T>
 auto eval_expr(Ln<T> e, Tuple const& tuple) {
-    return std::log(e(tuple));
+    using std::log;
+    return log(e(tuple));
 }
 
 template <typename Tuple, typename T>
 auto eval_expr(Sin<T> e, Tuple const& tuple) {
-    return std::sin(e(tuple));
+    using std::sin;
+    return sin(e(tuple));
 }
 template <typename Tuple, typename T>
 auto eval_expr(Cos<T> e, Tuple const& tuple) {
-    return std::cos(e(tuple));
+    using std::cos;
+    return cos(e(tuple));
 }
 
 template <typename Tuple, typename P1, typename P2>
@@ -642,8 +803,6 @@ constexpr auto isConst() {
     return isConst_impl<nr>(Expr{});
 }
 
-
-
 // ------------------- derive
 
 template<int nr=1, typename Expr, typename Head = Var<integer<0>>>
@@ -651,15 +810,15 @@ constexpr auto derive(Expr e, Head = {});
 
 template <int nr, typename N>
 constexpr auto derive_impl(Const<N>) {
-    return ConstZero{};
+    return 0_c;
 }
 
 template <int nr, integer<>::type n>
 constexpr auto derive_impl(Var<integer<n>>) {
     if constexpr(n == nr) {
-        return ConstOne{};
+        return 1_c;
     } else {
-        return ConstZero{};
+        return 0_c;
     }
 }
 
@@ -670,11 +829,11 @@ constexpr auto derive_impl(Ln<T> l) {
 
 template <int nr, typename T>
 constexpr auto derive_impl(Sin<T>) {
-    return Mul<Cos<T>, decltype(derive_impl<nr>(T{}))>{};
+    return cos(T{}) * derive_impl<nr>(T{});
 }
 template <int nr, typename T>
 constexpr auto derive_impl(Cos<T>) {
-    return Mul<Const<Number<integer<-1>>>, Sin<T>, decltype(derive_impl<nr>(T{}))>{};
+    return -sin(T{}) * derive_impl<nr>(T{});
 }
 
 
@@ -682,9 +841,9 @@ constexpr auto derive_impl(Cos<T>) {
 template <int nr, typename P1, typename P2>
 constexpr auto derive_impl(Exp<P1, P2> value) {
     if constexpr(is_same_tpl_v<P2, Const<>>) {
-        using Outer = Sum<P2, Const<Number<integer<-1>>>>;
+        auto outer = P2{} - 1_c;
         auto inner = derive_impl<nr>(P1{});
-       return Mul<P2, Exp<P1, Outer>, decltype(inner)>{};
+        return P2{} * pow(P1{}, outer) * inner;
     } else {
         constexpr auto p1 = derive_impl<nr>(P1{});
         constexpr auto p2 = derive_impl<nr>(P2{});
@@ -696,7 +855,7 @@ constexpr auto derive_impl(Exp<P1, P2> value) {
 
 template <int nr>
 constexpr auto derive_impl(Mul<> const&) {
-    return ConstZero{};
+    return 0_c;
 }
 
 template <int nr, typename Head, typename ...Ps>
@@ -713,7 +872,7 @@ constexpr auto derive_impl(Sum<Ps...> const&) {
 
 template<int nr, typename Expr, typename Head>
 constexpr auto derive(Expr e, Head) {
-    auto ret = full_simplify(derive_impl<Head::n>(Expr{}));
+    auto ret = full_simplify(derive_impl<Head::N::value>(Expr{}));
     if constexpr(nr > 1) {
         return derive<nr-1>(ret, Head{});
     } else {
@@ -731,99 +890,6 @@ auto partial_derive(Expr) {
 template<typename Expr, typename Head, typename ...Args>
 auto partial_derive(Expr e, Head head, Args... args) {
     return std::tuple_cat(std::make_tuple(derive(e, head)), partial_derive(e, args...));
-}
-// ------------------- parsing
-
-template <unsigned delCt>
-constexpr bool isValidDoubleImpl() {
-    return delCt == 0 or delCt == 1;
-}
-template <unsigned delCt, char digit, char... tail>
-constexpr bool isValidDoubleImpl() {
-    if constexpr(digit != '.' and (digit < '0' or digit > '9')) {
-        return false;
-    }
-    return isValidDoubleImpl<delCt + int(digit == '.'), tail...>();
-}
-
-template <char... tail>
-constexpr bool isValidDouble() {
-    return isValidDoubleImpl<0, tail...>();
-}
-
-
-static_assert(isValidDouble<'1', '.', '2'>());
-static_assert(isValidDouble<'.', '2'>());
-static_assert(isValidDouble<'.'>());
-static_assert(isValidDouble<>());
-static_assert(isValidDouble<'1' >());
-static_assert(isValidDouble<'1', '.' >());
-static_assert(not isValidDouble<'1', '.', '.' >());
-
-template <char... args>
-struct char_tuple {
-    const static std::string value;
-    const static size_t size = sizeof...(args);
-};
-
-template <char... args>
-const std::string char_tuple<args...>::value{args...};
-
-
-template <bool hasSplit, char del, typename P1, typename P2, char... args>
-struct split;
-
-template <bool hasSplit, char del, char ...args1, char ...args2>
-struct split<hasSplit, del, char_tuple<args1...>, char_tuple<args2...>> {
-    using P1 = char_tuple<args1...>;
-    using P2 = char_tuple<args2...>;
-};
-
-template<char del, char ...args1, char ...args2, char head, char ...tail>
-struct split<false, del, char_tuple<args1...>, char_tuple<args2...>, head, tail...> {
-    using NextSplit = split<false, del, char_tuple<args1..., head>, char_tuple<args2...>, tail...>;
-    using P1 = typename NextSplit::P1;
-    using P2 = typename NextSplit::P2;
-};
-
-template<char del, char ...args1, char ...args2, char ...tail>
-struct split<false, del, char_tuple<args1...>, char_tuple<args2...>, del, tail...> {
-    using NextSplit = split<true, del, char_tuple<args1...>, char_tuple<args2...>, tail...>;
-    using P1 = typename NextSplit::P1;
-    using P2 = typename NextSplit::P2;
-};
-
-
-template<char del, char ...args1, char ...args2, char head, char ...tail>
-struct split<true, del, char_tuple<args1...>, char_tuple<args2...>, head, tail...> {
-    using NextSplit = split<true, del, char_tuple<args1...>, char_tuple<args2..., head>, tail...>;
-    using P1 = typename NextSplit::P1;
-    using P2 = typename NextSplit::P2;
-};
-
-template <typename value, typename P1>
-struct stoi;
-
-template <typename Integer>
-struct stoi<Integer, char_tuple<>> {
-    using type = Integer;
-};
-
-template <typename Integer, char head, char... tail>
-struct stoi<Integer, char_tuple<head, tail...>> {
-    using type = typename stoi<integer<Integer::value * 10 + (head - '0')>, char_tuple<tail...>>::type;
-};
-
-template <char... args>
-constexpr auto operator "" _c() {
-    static_assert(isValidDouble<args...>());
-    using Split = split<false, '.', char_tuple<>, char_tuple<>, args...>;
-    using I1 = typename stoi<integer<0>, typename Split::P1>::type;
-    using I2 = typename stoi<integer<0>, typename Split::P2>::type;
-    using Shift = decltype(pow(Number<integer<10>>{}, integer<Split::P2::size>{}));
-    auto constexpr shift = Shift::N::value;
-    using N = decltype(normalize(Number<integer<I1::value * shift + I2::value>, integer<shift>>{}));
-    return Const<N>{};
 }
 
 // ------------------- solve
@@ -991,64 +1057,12 @@ constexpr auto integrate_impl(Sum<Ps...> const&) {
 
 template<int nr, typename Expr, typename Head>
 constexpr auto integrate(Expr, Head) {
-    auto ret = full_simplify(integrate_impl<Head::n>(Expr{}));
+    auto ret = full_simplify(integrate_impl<Head::N::value>(Expr{}));
     if constexpr(nr > 1) {
         return integrate<nr-1>(ret, Head{});
     } else {
         return ret;
     }
-}
-
-
-// ------------------- operator
-
-template <typename T1, typename T2>
-constexpr auto operator+(T1 const&, T2 const&) {
-    return full_simplify(Sum<T1, T2>{});
-}
-
-template <typename T1, typename T2>
-constexpr auto operator*(T1 const&, T2 const&) {
-    return full_simplify(Mul<T1, T2>{});
-}
-
-template <typename T1, typename T2>
-constexpr auto operator/(T1 const&, T2 const&) {
-    return full_simplify(Mul<T1, Exp<T2, Const<Number<integer<-1>>>>>{});
-}
-
-template <typename T1>
-constexpr auto operator-(T1 const&) {
-    return full_simplify(Mul<Const<Number<integer<-1>>>, T1>{});
-}
-template <typename T1, typename T2>
-constexpr auto operator-(T1 const&, T2 const&) {
-    return full_simplify(Sum<T1, Mul<Const<Number<integer<-1>>>, T2>>{});
-}
-
-template <typename T1, typename T2>
-constexpr auto pow(T1 const&, T2 const&) {
-    return full_simplify(Exp<T1, T2>{});
-}
-template <typename T1, typename T2>
-constexpr auto operator^(T1 const p1, T2 const& p2) {
-    return pow(p1, p2);
-}
-
-
-template <typename T1>
-constexpr auto ln(T1 const&) {
-    return full_simplify(Ln<T1>{});
-}
-
-template <typename T1>
-constexpr auto sin(T1 const&) {
-    return full_simplify(Sin<T1>{});
-}
-
-template <typename T1>
-constexpr auto cos(T1 const&) {
-    return full_simplify(Cos<T1>{});
 }
 
 

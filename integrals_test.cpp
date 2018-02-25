@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include "d_rive.h"
 
 using namespace d_rive;
