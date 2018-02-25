@@ -313,13 +313,13 @@ static_assert(std::abs(cos(Number<integer<67>, integer<10>>{}).value() -  0.9143
 static_assert(std::abs(cos(Number<integer<68>, integer<10>>{}).value() -  0.869397) < 1e-3);
 static_assert(std::abs(cos(Number<integer<69>, integer<10>>{}).value() -  0.815725) < 1e-3);
 
-static_assert(abs(Number<integer<10>>{}).value() == 10);
-static_assert(abs(Number<integer<-5>>{}).value() == 5);
-static_assert(abs(Number<integer<0>>{}).value() == 0);
+static_assert(number::abs(Number<integer<10>>{}).value() == 10);
+static_assert(number::abs(Number<integer<-5>>{}).value() == 5);
+static_assert(number::abs(Number<integer<0>>{}).value() == 0);
 
-static_assert(sign(Number<integer<10>>{}).value() == 1);
-static_assert(sign(Number<integer<-5>>{}).value() == -1);
-static_assert(sign(Number<integer<0>>{}).value() == 0);
+static_assert(number::sign(Number<integer<10>>{}).value() == 1);
+static_assert(number::sign(Number<integer<-5>>{}).value() == -1);
+static_assert(number::sign(Number<integer<0>>{}).value() == 0);
 
 static_assert(number::min(Number<integer<10>>{}).value() == 10);
 static_assert(number::min(Number<integer<-5>>{}).value() == -5);

@@ -2,6 +2,7 @@
 #include "tuple.h"
 #include "Number.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <numeric>
@@ -27,11 +28,22 @@ enum class PrintType {
     WolframAlpha
 };
 
+/* Every EntityBase should implement
+ *
+ * simplify_impl
+ * to_string_impl
+ * some operator for usage
+ * eval_expr
+ * derive_impl
+ * integrate
+ * isConst_impl
+ */
+
 template<typename T, typename ...Ps>
 struct EntityBase {
     using tuple = std::tuple<Ps...>;
     template <typename ...Args>
-    auto operator()(Args const&... args) const {
+    constexpr auto operator()(Args const&... args) const {
         return eval_expr_impl(T{}, args...);
     }
 
@@ -53,7 +65,7 @@ struct Const : EntityBase<Const<T>, Const<T>> {
 
     static_assert(is_same_tpl_v<Number<>, T>);
 
-    constexpr static double value() {
+    constexpr static auto value() {
         return N::value();
     }
 };
@@ -81,6 +93,18 @@ struct Cos : EntityBase<Cos<TP>, Cos<TP>> {
     using P = TP;
 };
 
+template <typename TP = ConstOne>
+struct Sign : EntityBase<Sign<TP>, Sign<TP>> {
+    using P = TP;
+};
+
+template <typename TP = ConstOne>
+struct Abs : EntityBase<Abs<TP>, Abs<TP>> {
+    using P = TP;
+};
+
+
+
 template <typename TP1 = ConstZero, typename TP2 = ConstOne>
 struct Exp : EntityBase<Exp<TP1, TP2>, Exp<TP1, TP2>> {
     using P1 = TP1;
@@ -92,6 +116,14 @@ struct Mul : EntityBase<Mul<Ps...>, Ps...> {};
 
 template <typename ...Ps>
 struct Sum : EntityBase<Sum<Ps...>, Ps...> {};
+
+template <typename ...Ps>
+struct Min : EntityBase<Min<Ps...>, Ps...> {};
+
+template <typename ...Ps>
+struct Max : EntityBase<Max<Ps...>, Ps...> {};
+
+
 
 // ------------------- Parsing, _c option
 
@@ -240,6 +272,16 @@ auto to_string_impl(Cos<TP>, PrintType type) {
     return "cos(" + to_string(TP{}, type) + ")";
 }
 
+template <typename TP>
+auto to_string_impl(Sign<TP>, PrintType type) {
+    return "sign(" + to_string(TP{}, type) + ")";
+}
+
+template <typename TP>
+auto to_string_impl(Abs<TP>, PrintType type) {
+    return "abs(" + to_string(TP{}, type) + ")";
+}
+
 template <typename TP1, typename TP2>
 auto to_string_impl(Exp<TP1, TP2>, PrintType type) {
     return "(" + to_string(TP1{}, type) + "^" + to_string(TP2{},type) + ")";
@@ -273,6 +315,26 @@ auto to_string_impl(Sum<Ps...>, PrintType type) {
         return to_string_multi_impl(" * ", std::tuple<Ps...>{}, type);
     }
 }
+
+template <typename ...Ps>
+auto to_string_impl(Min<Ps...>, PrintType type) {
+    if constexpr (sizeof...(Ps) == 0) {
+        return to_string_impl(0_c, type);
+    } else {
+        return "min" + to_string_multi_impl(", ", std::tuple<Ps...>{}, type);
+    }
+}
+
+template <typename ...Ps>
+auto to_string_impl(Max<Ps...>, PrintType type) {
+    if constexpr (sizeof...(Ps) == 0) {
+        return to_string_impl(0_c, type);
+    } else {
+        return "max" + to_string_multi_impl(", ", std::tuple<Ps...>{}, type);
+    }
+}
+
+
 
 template <typename Expr>
 auto to_string(Expr e, PrintType type = PrintType::Cpp) {
@@ -389,7 +451,7 @@ constexpr auto simplify(Ln<T> v) {
 }
 
 template <typename T>
-constexpr auto simplify(Sin<T> v) {
+constexpr auto simplify(Sin<T>) {
     if constexpr(is_same_tpl_v<T, Const<>>) {
         using N = typename T::N;
         return Const<decltype(sin(N{}))>{};
@@ -399,12 +461,32 @@ constexpr auto simplify(Sin<T> v) {
 }
 
 template <typename T>
-constexpr auto simplify(Cos<T> v) {
+constexpr auto simplify(Cos<T>) {
     if constexpr(is_same_tpl_v<T, Const<>>) {
         using N = typename T::N;
         return Const<decltype(cos(N{}))>{};
     } else {
         return Cos<decltype(simplify(T{}))>{};
+    }
+}
+
+template <typename T>
+constexpr auto simplify(Sign<T>) {
+    if constexpr(is_same_tpl_v<T, Const<>>) {
+        using N = typename T::N;
+        return Const<decltype(number::sign(N{}))>{};
+    } else {
+        return Sign<decltype(simplify(T{}))>{};
+    }
+}
+
+template <typename T>
+constexpr auto simplify(Abs<T>) {
+    if constexpr(is_same_tpl_v<T, Const<>>) {
+        using N = typename T::N;
+        return Const<decltype(number::abs(N{}))>{};
+    } else {
+        return Abs<decltype(simplify(T{}))>{};
     }
 }
 
@@ -575,6 +657,52 @@ constexpr auto simplify(Sum<Ps...> const& value) {
    }
 }
 
+template <typename ...Ps>
+constexpr auto simplify(Min<Ps...> const& value) {
+    static_assert(sizeof...(Ps) > 0);
+    if constexpr (sizeof...(Ps) == 1) {
+        return std::get<0>(typename Min<Ps...>::tuple{});
+    } else {
+        auto tuple = tuple_type_sort(std::tuple<decltype(simplify(Ps{}))...>{});
+        return tuple_to<Min>(tuple_apply_first_pair(tuple, overloaded {
+            [](auto t1, auto t2) {
+                if constexpr (std::is_same_v<decltype(t1), decltype(t2)>) {
+                    return std::tuple<decltype(t1)>{};
+                } else if constexpr (is_same_tpl_v<decltype(t1), Const<>> and is_same_tpl_v<decltype(t2), Const<>>) {
+                    if constexpr (decltype(t1)::value() < decltype(t2)::value()) {
+                        return std::tuple<decltype(t1)>{};
+                    } else {
+                        return std::tuple<decltype(t2)>{};
+                    }
+                }
+            }
+        }));
+    }
+}
+
+template <typename ...Ps>
+constexpr auto simplify(Max<Ps...> const& value) {
+    static_assert(sizeof...(Ps) > 0);
+    if constexpr (sizeof...(Ps) == 1) {
+        return std::get<0>(typename Max<Ps...>::tuple{});
+    } else {
+        auto tuple = tuple_type_sort(std::tuple<decltype(simplify(Ps{}))...>{});
+        return tuple_to<Max>(tuple_apply_first_pair(tuple, overloaded {
+            [](auto t1, auto t2) {
+                if constexpr (std::is_same_v<decltype(t1), decltype(t2)>) {
+                    return std::tuple<decltype(t1)>{};
+                } else if constexpr (is_same_tpl_v<decltype(t1), Const<>> and is_same_tpl_v<decltype(t2), Const<>>) {
+                    if constexpr (decltype(t1)::value() > decltype(t2)::value()) {
+                        return std::tuple<decltype(t1)>{};
+                    } else {
+                        return std::tuple<decltype(t2)>{};
+                    }
+                }
+            }
+        }));
+    }
+}
+
 template <typename Expr>
 constexpr auto full_simplify(Expr const& expr) {
     auto ret = simplify(expr);
@@ -628,54 +756,74 @@ constexpr auto replace([[maybe_unused]] V var) {
 
 // ------------------- operator
 
-template <typename T1, typename T2>
-constexpr auto operator+(T1 const&, T2 const&) {
+template <typename T1, typename T2, typename ...Ps1, typename... Ps2>
+constexpr auto operator+(EntityBase<T1, Ps1...> const&, EntityBase<T2, Ps2...> const&) {
     return full_simplify(Sum<T1, T2>{});
 }
 
-template <typename T1, typename T2>
-constexpr auto operator*(T1 const&, T2 const&) {
+template <typename T1, typename T2, typename ...Ps1, typename ...Ps2>
+constexpr auto operator*(EntityBase<T1, Ps1...> const&, EntityBase<T2, Ps2...> const&) {
     return full_simplify(Mul<T1, T2>{});
 }
 
-template <typename T1, typename T2>
-constexpr auto operator/(T1 const&, T2 const&) {
+template <typename T1, typename T2, typename ...Ps1, typename ...Ps2>
+constexpr auto operator/(EntityBase<T1, Ps1...> const&, EntityBase<T2, Ps2...> const&) {
     return full_simplify(Mul<T1, Exp<T2, Const<Number<integer<-1>>>>>{});
 }
 
-template <typename T1>
-constexpr auto operator-(T1 const&) {
+template <typename T1, typename ...Ps>
+constexpr auto operator-(EntityBase<T1, Ps...> const&) {
     return full_simplify(Mul<Const<Number<integer<-1>>>, T1>{});
 }
-template <typename T1, typename T2>
-constexpr auto operator-(T1 const&, T2 const&) {
+template <typename T1, typename T2, typename ...Ps1, typename ...Ps2>
+constexpr auto operator-(EntityBase<T1, Ps1...> const&, EntityBase<T2, Ps2...> const&) {
     return full_simplify(Sum<T1, Mul<Const<Number<integer<-1>>>, T2>>{});
 }
 
-template <typename T1, typename T2>
-constexpr auto pow(T1 const&, T2 const&) {
+template <typename T1, typename T2, typename ...Ps1, typename ...Ps2>
+constexpr auto pow(EntityBase<T1, Ps1...> const&, EntityBase<T2, Ps2...> const&) {
     return full_simplify(Exp<T1, T2>{});
 }
-template <typename T1, typename T2>
-constexpr auto operator^(T1 const p1, T2 const& p2) {
+template <typename T1, typename T2, typename ...Ps1, typename ...Ps2>
+constexpr auto operator^(EntityBase<T1, Ps1...> const p1, EntityBase<T2, Ps2...> const& p2) {
     return pow(p1, p2);
 }
 
 
-template <typename T1>
-constexpr auto ln(T1 const&) {
+template <typename T1, typename ...Ps>
+constexpr auto ln(EntityBase<T1, Ps...> const&) {
     return full_simplify(Ln<T1>{});
 }
 
-template <typename T1>
-constexpr auto sin(T1 const&) {
+template <typename T1, typename ...Ps>
+constexpr auto sin(EntityBase<T1, Ps...> const&) {
     return full_simplify(Sin<T1>{});
 }
 
-template <typename T1>
-constexpr auto cos(T1 const&) {
+template <typename T1, typename ...Ps>
+constexpr auto cos(EntityBase<T1, Ps...> const&) {
     return full_simplify(Cos<T1>{});
 }
+template <typename T1, typename ...Ps>
+constexpr auto sign(EntityBase<T1, Ps...> const&) {
+    return full_simplify(Sign<T1>{});
+}
+template <typename T1, typename ...Ps>
+constexpr auto abs(EntityBase<T1, Ps...> const&) {
+    return full_simplify(Abs<T1>{});
+}
+
+template <typename ...Ts>
+constexpr auto min(Ts const&...) {
+    return full_simplify(Min<Ts...>{});
+}
+
+template <typename ...Ts>
+constexpr auto max(Ts const&...) {
+    return full_simplify(Max<Ts...>{});
+}
+
+
 
 
 
@@ -689,66 +837,99 @@ auto set(T) {
 }
 
 template <typename Expr, typename Var, typename Const, typename ...Args>
-auto eval(Expr e, std::tuple<Var, Const>, Args... args) {
+constexpr auto eval(Expr e, std::tuple<Var, Const>, Args... args) {
     return full_simplify(eval(replace<Var, Const>(e), args...));
 }
 
 template <typename Expr>
-auto eval(Expr) {
+constexpr auto eval(Expr) {
     return Expr{};
 }
 
 template <typename Expr, typename ...Args>
-auto eval_expr_impl(Expr e, Args... args) {
+constexpr auto eval_expr_impl(Expr e, Args... args) {
     return eval_expr(e, std::make_tuple(args...));
 }
 
 template <typename Tuple, typename T>
-auto eval_expr(Const<T>, Tuple const&) {
+constexpr auto eval_expr(Const<T>, Tuple const&) {
     return Const<T>::value();
 }
 
 template <typename Tuple, typename T>
-auto eval_expr(Var<T>, Tuple const& tuple) {
+constexpr auto eval_expr(Var<T>, Tuple const& tuple) {
     return std::get<T::value>(tuple);
 }
 
 template <typename Tuple, typename T>
-auto eval_expr(Ln<T> e, Tuple const& tuple) {
+constexpr auto eval_expr(Ln<T>, Tuple const& tuple) {
     using std::log;
-    return log(e(tuple));
+    return log(eval_expr(T{}, tuple));
 }
 
 template <typename Tuple, typename T>
-auto eval_expr(Sin<T> e, Tuple const& tuple) {
+constexpr auto eval_expr(Sin<T>, Tuple const& tuple) {
     using std::sin;
-    return sin(e(tuple));
+    return sin(eval_expr(T{}, tuple));
 }
 template <typename Tuple, typename T>
-auto eval_expr(Cos<T> e, Tuple const& tuple) {
+constexpr auto eval_expr(Cos<T>, Tuple const& tuple) {
     using std::cos;
-    return cos(e(tuple));
+    return cos(eval_expr(T{}, tuple));
 }
+
+template <typename Tuple, typename T>
+constexpr auto eval_expr(Sign<T>, Tuple const& tuple) {
+    auto r = eval_expr(T{}, tuple);
+    if (r > 0) {
+        return 1.;
+    } else if (r < 0) {
+        return -1.;
+    } else {
+        return 0.;
+    }
+}
+
+
+template <typename Tuple, typename T>
+constexpr auto eval_expr(Abs<T> e, Tuple const& tuple) {
+    using std::abs;
+    return abs(eval_expr(T{}, tuple));
+}
+
 
 template <typename Tuple, typename P1, typename P2>
-auto eval_expr(Exp<P1, P2> e, Tuple const& tuple) {
+constexpr auto eval_expr(Exp<P1, P2> e, Tuple const& tuple) {
     using std::pow;
     return pow(eval_expr(P1{}, tuple), eval_expr(P2{}, tuple));
 }
 
 template <typename Tuple, typename ...Ps>
-auto eval_expr(Mul<Ps...> e, Tuple const& tuple) {
+constexpr auto eval_expr(Mul<Ps...> e, Tuple const& tuple) {
     return std::apply([&](auto ...e) {
         return (eval_expr(e, tuple) * ...);
     }, typename Mul<Ps...>::tuple{});
 }
 
 template <typename Tuple, typename ...Ps>
-auto eval_expr(Sum<Ps...> e, Tuple const& tuple) {
+constexpr auto eval_expr(Sum<Ps...> e, Tuple const& tuple) {
     return std::apply([&](auto ...e) {
         return (eval_expr(e, tuple) + ...);
     }, typename Mul<Ps...>::tuple{});
 }
+
+template <typename Tuple, typename ...Ps>
+constexpr auto eval_expr(Min<Ps...> e, Tuple const& tuple) {
+    using std::min;
+    return min({eval_expr(Ps{}, tuple)...});
+}
+template <typename Tuple, typename ...Ps>
+constexpr auto eval_expr(Max<Ps...> e, Tuple const& tuple) {
+    using std::max;
+    return max({eval_expr(Ps{}, tuple)...});
+}
+
+
 
 // ------------------- is const
 
@@ -778,6 +959,17 @@ constexpr auto isConst_impl(Cos<T> l) {
     return isConst_impl<nr>(T{});
 }
 
+template <int nr, typename T>
+constexpr auto isConst_impl(Sign<T> l) {
+    return isConst_impl<nr>(T{});
+}
+template <int nr, typename T>
+constexpr auto isConst_impl(Abs<T> l) {
+    return isConst_impl<nr>(T{});
+}
+
+
+
 template <int nr, typename P1, typename P2>
 constexpr auto isConst_impl(Exp<P1, P2> value) {
     return isConst_impl<nr>(P1{}) and isConst_impl<nr>(P2{});
@@ -797,6 +989,20 @@ constexpr auto isConst_impl(Sum<Ps...> const& e) {
         return (isConst_impl<nr>(e) and ...);
     }, typename Sum<Ps...>::tuple{});
 }
+template <int nr, typename ...Ps>
+constexpr auto isConst_impl(Min<Ps...> const& e) {
+    return std::apply([](auto ...e){
+        return (isConst_impl<nr>(e) and ...);
+    }, typename Min<Ps...>::tuple{});
+}
+template <int nr, typename ...Ps>
+constexpr auto isConst_impl(Max<Ps...> const& e) {
+    return std::apply([](auto ...e){
+        return (isConst_impl<nr>(e) and ...);
+    }, typename Max<Ps...>::tuple{});
+}
+
+
 
 template<int nr, typename Expr>
 constexpr auto isConst() {
@@ -836,6 +1042,15 @@ constexpr auto derive_impl(Cos<T>) {
     return -sin(T{}) * derive_impl<nr>(T{});
 }
 
+template <int nr, typename T>
+constexpr auto derive_impl(Sign<T>) {
+    return 0_c;
+}
+
+template <int nr, typename T>
+constexpr auto derive_impl(Abs<T>) {
+    return abs(derive_impl<nr>(T{}));
+}
 
 
 template <int nr, typename P1, typename P2>
@@ -852,6 +1067,15 @@ constexpr auto derive_impl(Exp<P1, P2> value) {
     }
 }
 
+template<int nr, typename Expr, typename Head>
+constexpr auto derive(Expr e, Head) {
+    auto ret = full_simplify(derive_impl<Head::N::value>(Expr{}));
+    if constexpr(nr > 1) {
+        return derive<nr-1>(ret, Head{});
+    } else {
+        return ret;
+    }
+}
 
 template <int nr>
 constexpr auto derive_impl(Mul<> const&) {
@@ -870,14 +1094,14 @@ constexpr auto derive_impl(Sum<Ps...> const&) {
     return Sum<decltype(derive_impl<nr>(Ps{}))...>{};
 }
 
-template<int nr, typename Expr, typename Head>
-constexpr auto derive(Expr e, Head) {
-    auto ret = full_simplify(derive_impl<Head::N::value>(Expr{}));
-    if constexpr(nr > 1) {
-        return derive<nr-1>(ret, Head{});
-    } else {
-        return ret;
-    }
+template <int nr, typename ...Ps>
+constexpr auto derive_impl(Min<Ps...> const&) {
+    return Min<decltype(derive_impl<nr>(Ps{}))...>{};
+}
+
+template <int nr, typename ...Ps>
+constexpr auto derive_impl(Max<Ps...> const&) {
+    return Max<decltype(derive_impl<nr>(Ps{}))...>{};
 }
 
 // ------------------- partial derivative
@@ -1007,6 +1231,18 @@ constexpr auto integrate_impl(Cos<T>) {
     return Mul<Sin<T>, Exp<decltype(z), Const<Number<integer<-1>>> >>{};
 }
 
+template <int nr, typename T>
+constexpr auto integrate_impl(Sign<T>) {
+    constexpr auto r = sign(T{}) * Var<integer<nr>>{};
+    static_assert(std::is_same_v<decltype(full_simplify(derive_impl<nr>(r))), Sign<T>>, "can't integrate function");
+    return r;
+}
+
+template <int nr, typename T>
+constexpr auto integrate_impl(Abs<T>) {
+    return abs(integrate_impl<nr>(T{}));
+}
+
 template <int nr, typename P1, typename P2>
 constexpr auto integrate_impl([[maybe_unused]] Exp<P1, P2> e) {
     static_assert(isConst<nr, P1>() or isConst<nr, P2>());
@@ -1054,6 +1290,18 @@ template <int nr, typename ...Ps>
 constexpr auto integrate_impl(Sum<Ps...> const&) {
     return Sum<decltype(integrate_impl<nr>(Ps{}))...>{};
 }
+
+template <int nr, typename ...Ps>
+constexpr auto integrate_impl(Min<Ps...> const&) {
+    return Min<decltype(integrate_impl<nr>(Ps{}))...>{};
+}
+
+template <int nr, typename ...Ps>
+constexpr auto integrate_impl(Max<Ps...> const&) {
+    return Max<decltype(integrate_impl<nr>(Ps{}))...>{};
+}
+
+
 
 template<int nr, typename Expr, typename Head>
 constexpr auto integrate(Expr, Head) {

@@ -4,7 +4,7 @@
 
 Compile time math expressions with c++17.
 - standard math addition, subtraction, multiplication, division
-- sin, cos, pow, and ln
+- sin, cos, pow, ln, sign, abs, max and min
 - derivation
 - integration
 

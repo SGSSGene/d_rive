@@ -147,3 +147,53 @@ static_assert(sizeof(derive(x<0>)) == 1);
 static_assert(sizeof(derive(-cos(x<0>))) == 1);
 static_assert(sizeof(3_c  - 1_c) == 1);
 
+static_assert((2_c)() == 2.);
+static_assert((-3_c)() == -3.);
+static_assert((0_c)() == 0.);
+static_assert((-3.3_c)() == -3.3);
+static_assert((x<0>)(0) == 0.);
+static_assert((x<0>)(-2.3) == -2.3);
+static_assert((x<0>)(0.5) == 0.5);
+static_assert((x<0>+x<1>)(0, 0) == 0.);
+static_assert((x<0>+x<1>)(-2.5, 1.25) == -1.25);
+static_assert((x<0>+x<1>)(0.5, 1.2) == 1.7);
+static_assert((x<0>*x<1>)(0, 3) == 0.);
+static_assert((x<0>*x<1>)(-2.3, 1.2) == -2.76);
+static_assert((x<0>*x<1>)(0.5, 1.2) == 0.6);
+
+static_assert(derive(abs(x<0>))  == abs(1_c));
+static_assert(derive(abs(x<0>*x<0>))  == abs(2_c*x<0>));
+
+static_assert(integrate(abs(x<0>))      == abs(integrate(x<0>)));
+static_assert(integrate(abs(x<0>*x<0>)) == abs(integrate(x<0>*x<0>)));
+
+
+static_assert(derive(sign(x<0>)) == 0_c);
+static_assert(derive(sign(x<0>*x<0>)) == 0_c);
+
+static_assert(integrate(sign(x<0>)) == sign(x<0>) * x<0>);
+static_assert(integrate(sign(x<0>*x<0>)) == sign(x<0>*x<0>) * x<0>);
+
+static_assert(integrate(sign(x<0>^(0.5_c))) == sign(x<0>^(0.5_c)) * x<0>);
+
+
+static_assert(max(1_c) == 1_c);
+static_assert(max(1_c, 3_c) == 3_c);
+static_assert(max(1_c, 5_c, 3_c) == 5_c);
+static_assert(min(1_c) == 1_c);
+static_assert(min(1_c, 3_c) == 1_c);
+static_assert(min(1_c, 5_c, -3_c) == -3_c);
+static_assert(min(1_c, -5_c, -3_c) == -5_c);
+static_assert(min(1_c, -5_c, x<0>, -3_c) == min(x<0>, -5_c));
+static_assert(max(1_c, -5_c, x<0>, -3_c) == max(x<0>, 1_c));
+
+static_assert(max(x<0>, x<1>)(2., 1.) == 2.);
+static_assert(max(x<0>, x<1>)(2., 3.) == 3.);
+static_assert(min(x<0>, x<1>)(2., 1.) == 1.);
+static_assert(min(x<0>, x<1>)(2., 3.) == 2.);
+static_assert(derive(min(x<0>, x<0>*x<0>)) == min(1_c, 2_c * x<0>));
+static_assert(derive(max(x<0>, x<0>*x<0>)) == max(1_c, 2_c * x<0>));
+
+static_assert(integrate(min(x<0>, x<0>*x<0>)) == min(integrate(x<0>), integrate(x<0>*x<0>)));
+static_assert(integrate(max(x<0>, x<0>*x<0>)) == max(integrate(x<0>), integrate(x<0>*x<0>)));
+
