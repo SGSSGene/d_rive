@@ -8,7 +8,8 @@ Compile time math expressions with c++17.
 - derivation
 - integration
 
-Check example1.cpp and exampleQuat.cpp for more exciting examples
+Check example1.cpp and exampleQuat.cpp for more exciting examples..
+To try the examples use a modern compiler and compile the .cpp file `g++ -std=c++17 example.cpp`.
 
 ## Examples
 
