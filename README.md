@@ -55,7 +55,7 @@ Compile time roots? (`sqrt(2)`)
 ```
     std::cout << (2_c^0.5_c) << "\n";
 ```
-Multiple variables: (`f(x0, x1, x2) = x0*x2 + x2`)
+Multiple variables: (`f(x0, x1, x2) = x0*x1 + x2`)
 ```
     auto f = x<0>*x<1> + x<2>;
     std::cout << f(1, 2, 3) << "\n";
