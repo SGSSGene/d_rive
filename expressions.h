@@ -335,7 +335,7 @@ auto to_string_impl(Sum<Ps...>, PrintType type) {
     if constexpr (sizeof...(Ps) == 0) {
         return to_string_impl(0_c, type);
     } else {
-        return to_string_multi_impl(" * ", std::tuple<Ps...>{}, type);
+        return to_string_multi_impl(" + ", std::tuple<Ps...>{}, type);
     }
 }
 
