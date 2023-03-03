@@ -48,7 +48,7 @@ template<auto v1, auto v2>
 constexpr auto operator/(integer<v1>, integer<v2>) {
     static_assert(v2 != 0);
     using std::gcd;
-    static_assert(gcd(v1, v2) == v2 or gcd(v1, v2) == -v2);
+    static_assert(gcd(uint64_t(v1), uint64_t(v2)) == v2 or gcd(uint64_t(v1), uint64_t(v2)) == -v2);
     return integer<v1 / v2>{};
 }
 
@@ -90,13 +90,13 @@ constexpr auto max(integer<v1>, integer<v2>) {
 template<auto v1, auto v2>
 constexpr auto lcm(integer<v1>, integer<v2>) {
     using std::lcm;
-    return integer<lcm(v1, v2)>{};
+    return integer<lcm(uint64_t(v1), uint64_t(v2))>{};
 }
 
 template<auto v1, auto v2>
 constexpr auto gcd(integer<v1>, integer<v2>) {
     using std::gcd;
-    return integer<gcd(v1, v2)>{};
+    return integer<gcd(uint64_t(v1), uint64_t(v2))>{};
 }
 
 template <typename TN = integer<0>, typename TD = integer<1>>
