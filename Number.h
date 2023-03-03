@@ -21,14 +21,17 @@ struct integer {
     inline constexpr static type lower_type_max = std::numeric_limits<lower_type>::max();
     inline constexpr static type value = v;
 
+    static_assert(std::numeric_limits<lower_type>::min() <= v, "underflow");
+    static_assert(std::numeric_limits<lower_type>::max() >= v, "overflow");
+
     constexpr bool operator==(type _v) const {
         return _v == v;
     }
     constexpr bool operator!=(type _v) const {
         return _v != v;
     }
-
 };
+
 template<auto v1, auto v2>
 constexpr auto operator+(integer<v1>, integer<v2>) {
     return integer<v1 + v2>{};
