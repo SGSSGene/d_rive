@@ -2,10 +2,12 @@
 #include "tuple.h"
 #include "Number.h"
 
+#include <array>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <numeric>
+#include <span>
 #include <ostream>
 #include <sstream>
 
@@ -144,6 +146,26 @@ constexpr bool isValidDouble() {
     return isValidDoubleImpl<0, tail...>();
 }
 
+constexpr bool isValidDouble(std::span<char const> str) {
+    str = str.first(str.size()-1);
+    bool hasPoint{};
+    for (auto c : str) {
+        if (c == '.' and !hasPoint) {
+            hasPoint = true;
+            continue;
+        }
+        if (c < '0' or '9' < c) return false;
+    }
+    return true;
+}
+static_assert(isValidDouble("1.2"));
+static_assert(isValidDouble(".2"));
+static_assert(isValidDouble("."));
+static_assert(isValidDouble(""));
+static_assert(isValidDouble("1"));
+static_assert(isValidDouble("1."));
+static_assert(not isValidDouble("1.."));
+
 
 static_assert(isValidDouble<'1', '.', '2'>());
 static_assert(isValidDouble<'.', '2'>());
@@ -209,7 +231,8 @@ struct stoi<Integer, char_tuple<head, tail...>> {
 
 template <char... args>
 constexpr auto operator "" _c() {
-    static_assert(isValidDouble<args...>());
+    constexpr auto a = std::array{args...};
+    static_assert(isValidDouble(a));
     using Split = split<false, '.', char_tuple<>, char_tuple<>, args...>;
     using I1 = typename stoi<integer<0>, typename Split::P1>::type;
     using I2 = typename stoi<integer<0>, typename Split::P2>::type;
