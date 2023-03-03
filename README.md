@@ -2,14 +2,14 @@
 [![forthebadge](https://forthebadge.com/images/badges/you-didnt-ask-for-this.svg)](https://forthebadge.com)
 [![forthebadge](https://forthebadge.com/images/badges/uses-badges.svg)](https://forthebadge.com)
 
-Compile time math expressions with c++17.
+Compile time math expressions with c++20.
 - standard math addition, subtraction, multiplication, division
 - sin, cos, pow, ln, sign, abs, max and min
 - derivation
 - integration
 
 Check example1.cpp and exampleQuat.cpp for more exciting examples..
-To try the examples use a modern compiler and compile the .cpp file `g++ -std=c++17 example.cpp`.
+To try the examples use a modern compiler and compile the .cpp file `g++ -std=c++20 example1.cpp`.
 
 ## Examples
 
