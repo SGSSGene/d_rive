@@ -5,6 +5,7 @@
 #include <numeric>
 #include <cstdint>
 #include <ostream>
+#include <type_traits>
 
 #include "tuple.h"
 
@@ -50,15 +51,12 @@ constexpr auto operator*(integer<v1>, integer<v2>) {
 template<auto v1, auto v2>
 constexpr auto operator/(integer<v1>, integer<v2>) {
     static_assert(v2 != 0);
-    using std::gcd;
-    static_assert(gcd(uint64_t(v1), uint64_t(v2)) == v2 or gcd(uint64_t(v1), uint64_t(v2)) == -v2);
     return integer<v1 / v2>{};
 }
 
 template<auto v1, auto v2>
 constexpr auto unsafe_div(integer<v1>, integer<v2>) {
     static_assert(v2 != 0);
-    using std::gcd;
     return integer<v1 / v2>{};
 }
 
@@ -92,170 +90,151 @@ constexpr auto max(integer<v1>, integer<v2>) {
 
 template<auto v1, auto v2>
 constexpr auto lcm(integer<v1>, integer<v2>) {
-    using std::lcm;
-    return integer<lcm(uint64_t(v1), uint64_t(v2))>{};
+    return integer<std::lcm(int64_t(v1), int64_t(v2))>{};
 }
 
 template<auto v1, auto v2>
 constexpr auto gcd(integer<v1>, integer<v2>) {
-    using std::gcd;
-    return integer<gcd(uint64_t(v1), uint64_t(v2))>{};
+    return integer<std::gcd(int64_t(v1), int64_t(v2))>{};
 }
 
-template <typename TN = integer<0>, typename TD = integer<1>>
+template <long double v = 0.l>
 struct Number {
-    static_assert(TD::value != 0);
-
-    using N = TN;
-    using D = TD;
-
-    static constexpr double value() {
-        return double(N::value) / double(D::value);
+    static constexpr long double value() {
+        return v;
     }
 };
 
-template<typename TN1, typename TD1>
-constexpr auto normalize(Number<TN1, TD1>) {
-    constexpr auto _gcd = gcd(TN1{}, TD1{});
-    constexpr auto s    = sign(TN1{}) * sign(TD1{});
+template <typename T>
+struct is_number : std::false_type {};
 
-    using N = decltype(abs(TN1{}/_gcd) * s);
-    using D = decltype(abs(TD1{}/_gcd));
+template <auto v>
+struct is_number<Number<v>> : std::true_type {};
 
-    constexpr auto kurz_N = unsafe_div(abs(N{}), integer<integer<>::lower_type_max>{}) + integer<1>{};
-    constexpr auto kurz_D = unsafe_div(abs(D{}), integer<integer<>::lower_type_max>{}) + integer<1>{};
 
-    constexpr auto in_limits = max(kurz_N, kurz_D);
+template <typename T>
+concept CNumber = is_number<T>::value;
 
-    return Number<decltype(unsafe_div(N{}, in_limits)), decltype(unsafe_div(D{}, in_limits))>{};
+template<auto v1, auto v2>
+constexpr auto operator+(Number<v1>, Number<v2>) {
+    return Number<v1+v2>{};
+}
+template<auto v1, auto v2>
+constexpr auto operator-(Number<v1>, Number<v2>) {
+    return Number<v1-v2>{};
+}
+template<auto v1, auto v2>
+constexpr auto operator*(Number<v1>, Number<v2>) {
+    return Number<v1*v2>{};
+}
+template<auto v1, auto v2>
+constexpr auto operator/(Number<v1>, Number<v2>) {
+    static_assert(v2 != 0.l, "Can't divide by zero");
+    return Number<v1/v2>{};
+}
+template<auto v>
+constexpr auto operator-(Number<v>) {
+    return Number<-v>{};
 }
 
-template<typename TN1, typename TD1, typename TN2, typename TD2>
-constexpr auto operator+(Number<TN1, TD1>, Number<TN2, TD2>) {
-    using D = decltype(lcm(TD1{}, TD2{}));
-    using N = decltype(TN1{} * (D{}/TD1{}) + TN2{} * (D{}/TD2{}));
-    return normalize(Number<N, D>{});
-}
-
-template<typename TN1, typename TD1, typename TN2, typename TD2>
-constexpr auto operator-(Number<TN1, TD1>, Number<TN2, TD2>) {
-    using D = decltype(lcm(TD1{}, TD2{}));
-    using N = decltype(TN1{} * (D{}/TD1{}) - TN2{} * (D{}/TD2{}));
-    return normalize(Number<N, D>{});
-}
-
-template<typename TN1, typename TD1, typename TN2, typename TD2>
-constexpr auto operator*(Number<TN1, TD1>, Number<TN2, TD2>) {
-    using N = decltype(TN1{} * TN2{});
-    using D = decltype(TD1{} * TD2{});
-    return normalize(Number<N, D>{});
-}
-
-template<typename TN1, typename TD1, typename TN2, typename TD2>
-constexpr auto operator/(Number<TN1, TD1>, Number<TN2, TD2>) {
-    using N = decltype(TN1{} * TD2{});
-    using D = decltype(TD1{} * TN2{});
-    return normalize(Number<N, D>{});
-}
-
-template<typename TN1, typename TD1>
-constexpr auto operator-(Number<TN1, TD1>) {
-    return Number<decltype(-TN1{}), TD1>{};
-}
-
-template<typename TN1, typename TD1, auto n>
-constexpr auto pow(Number<TN1, TD1> _number, integer<n>) {
-    static_assert(n != 0 or TN1{} != 0);
-    static_assert(n >= 0);
-    if constexpr (n == 0) {
-        (void)_number;
-        return Number<integer<1>>{};
-    } else if constexpr (n == 1) {
-        return _number;
-    } else {
-        return _number * pow(_number, integer<n-1>{});
+constexpr long double pow(long double base, int64_t iexp) {
+    if (iexp < 0) {
+        return 1.l/pow(base, -iexp);
     }
+    if (iexp == 0) {
+        return 1.l;
+    }
+    auto v = pow(base, iexp/2);
+    if (iexp % 2 == 0) {
+        return v * v;
+    }
+    return v * v * base;
 }
 
-template<auto n, typename Backtrace = std::tuple<>, typename TN1, typename TD1, typename TN2, typename TD2>
-constexpr auto n_root_impl(Number<TN1, TD1> _number, integer<n> _n, Number<TN2, TD2> _guess) {
-    constexpr auto s1 = normalize(Number<integer<n - 1>>{} * _guess);
-    constexpr auto s2 = normalize(_number / pow(_guess, integer<n-1>{}));
-    constexpr auto r = normalize((s1 + s2) * Number<integer<1>, integer<n>>{});
+template<auto v, auto n>
+constexpr auto pow(Number<v>, integer<n>) {
+    return Number<pow(v, n)>{};
+}
+
+template<auto n, typename Backtrace = std::tuple<>, auto v1, auto v2>//typename TN1, typename TD1, typename TN2, typename TD2>
+constexpr auto n_root_impl(Number<v1> _number, integer<n>, Number<v2> _guess) {
+    constexpr auto s1 = Number<(n-1)*v2>{};
+    constexpr auto s2 = _number / pow(_guess, integer<n-1>{});
+    constexpr auto r = (s1 + s2) * Number<1.l/n>{};
 
     using R = decltype(r);
     using L = decltype(_guess);
 
     if constexpr(std::is_same_v<R, L> or tuple_type_count_t<R, Backtrace>::value > 0) {
-        (void)_n;
         return r;
     } else {
-        return n_root_impl<n, tuple_cat_t<Backtrace, std::tuple<R>>>(_number, _n, r);
+        return n_root_impl<n, tuple_cat_t<Backtrace, std::tuple<R>>>(_number, integer<n>{}, r);
     }
 }
 
-template<auto n, typename TN1, typename TD1>
-constexpr auto n_root(Number<TN1, TD1> _number, integer<n> _n) {
-    return n_root_impl<n>(_number, _n, normalize(Number<integer<1>, decltype(TD1{}*integer<2>{})>{}));
+template<auto n, auto v>
+constexpr auto n_root(Number<v> _number, integer<n> _n) {
+    return n_root_impl<n>(_number, _n, Number<1.l / (10.l * 2)>{});
 }
 
-template<typename TN1, typename TD1>
-constexpr auto inv(Number<TN1, TD1>) {
-    return normalize(Number<TD1, TN1>{});
+template<auto v>
+constexpr auto inv(Number<v>) {
+    return Number<1.l / v>{};
 }
 
-template<typename TN1, typename TD1, typename TN2, typename TD2>
-constexpr auto pow(Number<TN1, TD1> _v1, Number<TN2, TD2>) {
-    if constexpr(TN2::value > 0) {
+template<auto v1, auto v2>
+constexpr auto pow(Number<v1> _v1, Number<v2>) {
+    //!TODO there must be a better solution...
+//    constexpr auto d = 1000000000000000000ull;
+    constexpr auto d = 6ll;
+
+    constexpr auto n = int64_t(v2 * d);
+    using TD2 = integer<d>;
+    using TN2 = integer<n>;
+    if constexpr (v2 > 0) {
         return pow(n_root(_v1, TD2{}), TN2{});
     } else {
         return inv(pow(n_root(_v1, TD2{}), -TN2{}));
     }
 }
 
-template<typename N = integer<1>, typename Backtrace = std::tuple<>, typename TN1, typename TD1, typename TN2, typename TD2>
-constexpr auto ln_impl(Number<TN1, TD1> _n, Number<TN2, TD2> _last) {
-    constexpr auto t1 = Number<TN1, TD1>{} - Number<integer<1>>{};
-    constexpr auto t2 = Number<TN1, TD1>{} + Number<integer<1>>{};
-
-    constexpr auto r = pow(t1/t2, N{}) * Number<integer<2>, N>{} + _last;
-
-    using R = decltype(r);
-    using L = Number<TN1, TD1>;
+template<uint64_t N = 1, typename Backtrace = std::tuple<>, auto v1, auto v2>
+constexpr auto ln_impl(Number<v1> _n, Number<v2> _last) {
+    using R = Number<pow((v1-1)/(v1+1), N) * 2.l/N + v2>;
+    using L = Number<v1>;
     if constexpr(std::is_same_v<R, L> or tuple_type_count_t<R, Backtrace>::value > 0) {
         (void)_n;
-        return r;
+        return R{};
     } else {
-        using Next = decltype(N{} + integer<2>{});
-        return ln_impl<Next, tuple_cat_t<Backtrace, std::tuple<R>>>(_n, r);
+        return ln_impl<N+2, tuple_cat_t<Backtrace, std::tuple<R>>>(_n, R{});
     }
 }
 
-template<typename TN1, typename TD1>
-constexpr auto ln(Number<TN1, TD1> _n) {
+constexpr auto ln(CNumber auto _n) {
     return ln_impl(_n, Number<>{});
 }
 
-template<typename TN1, typename TD1, typename TN2, typename TD2>
-constexpr auto log(Number<TN2, TD2> _base, Number<TN1, TD1> _n) {
+constexpr auto log(CNumber auto _base, CNumber auto _n) {
     return ln(_n) / ln(_base);
 }
 
 namespace number {
-template<typename TN1, typename TD1>
-constexpr auto sign(Number<TN1, TD1> _n) {
-    if constexpr (TN1::value > 0) {
-        return Number<integer<1>>{};
-    } else if constexpr (TN1::value < 0) {
-        return Number<integer<-1>>{};
+
+template<auto v1>
+constexpr auto sign(Number<v1> _n) {
+    if constexpr (v1 > 0) {
+        return Number<1.l>{};
+    } else if constexpr (v1 < 0) {
+        return Number<-1.l>{};
     } else {
         return Number<>{};
     }
 }
 
-template<typename TN1, typename TD1>
-constexpr auto abs(Number<TN1, TD1> _n) {
-    return Number<decltype(abs(TN1{})), TD1>{};
+template<auto v1>
+constexpr auto abs(Number<v1> _n) {
+    if constexpr (v1 >= 0) return _n;
+    else return -_n;
 }
 
 template<typename Head, typename ...N>
@@ -288,55 +267,31 @@ constexpr auto max(Head, N...) {
     }
 }
 
-
-
 }
 
 
-
-
-template<int f_x, typename Backtrace = std::tuple<>, typename X, typename NumbSum, typename Numb>
+template<uint64_t f_x, typename Backtrace = std::tuple<>, CNumber X, CNumber NumbSum, CNumber Numb>
 constexpr auto sin_impl(X, NumbSum, Numb) {
-    constexpr auto newNumb = normalize(-Numb{} * X{} * X{} / Number<integer<f_x>>{} / Number<integer<f_x-1>>{});
-    constexpr auto newNumbSum = normalize(NumbSum{} + newNumb);
-    constexpr auto r = newNumbSum;
+    constexpr auto newNumb = -Numb{} * X{} * X{} / Number<f_x*1.l>{} / Number<f_x-1.l>{};
+    constexpr auto newNumbSum = NumbSum{} + newNumb;
 
-    using R = decltype(r);
+    using R = decltype(newNumbSum);
     using L = X;
     if constexpr(std::is_same_v<R, L> or tuple_type_count_t<R, Backtrace>::value > 0) {
-        return r;
+        return newNumbSum;
     } else {
         return sin_impl<f_x+2, tuple_cat_t<Backtrace, std::tuple<R>>>(X{}, newNumbSum, newNumb);
     }
 }
 
-template<typename TN1, typename TD1>
-constexpr auto sin(Number<TN1, TD1> x) {
+constexpr auto sin(CNumber auto x) {
     return sin_impl<3>(x, x, x);
 }
 
-template<int f_x, typename Backtrace = std::tuple<>, typename X, typename NumbSum, typename Numb>
-constexpr auto cos_impl(X, NumbSum, Numb) {
-    constexpr auto newNumb = normalize(-Numb{} * X{} * X{} / Number<integer<f_x>>{} / Number<integer<f_x-1>>{});
-    constexpr auto newNumbSum = normalize(NumbSum{} + newNumb);
-    constexpr auto r = newNumbSum;
-
-    using R = decltype(r);
-    using L = X;
-    if constexpr(std::is_same_v<R, L> or tuple_type_count_t<R, Backtrace>::value > 0) {
-        return r;
-    } else {
-        return cos_impl<f_x+2, tuple_cat_t<Backtrace, std::tuple<R>>>(X{}, newNumbSum, newNumb);
-    }
-}
-
-template<typename TN1, typename TD1>
-constexpr auto cos(Number<TN1, TD1> x) {
-    return sin_impl<2>(x, Number<integer<1>>{}, Number<integer<1>>{});
+constexpr auto cos(CNumber auto x) {
+    return sin_impl<2>(x, Number<1.l>{}, Number<1.l>{});
 }
 
 
-inline constexpr auto pi = Number<integer<3141592653589793238>,
-                                  integer<1000000000000000000>>{};
-
+inline constexpr auto pi = Number<3.141592653589793238l>{};
 } // namespace d_rive::detail
