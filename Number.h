@@ -54,13 +54,6 @@ constexpr auto operator/(integer<v1>, integer<v2>) {
     return integer<v1 / v2>{};
 }
 
-template<auto v1, auto v2>
-constexpr auto unsafe_div(integer<v1>, integer<v2>) {
-    static_assert(v2 != 0);
-    return integer<v1 / v2>{};
-}
-
-
 template<auto v>
 constexpr auto sign(integer<v>) {
     if constexpr(v == 0) {
